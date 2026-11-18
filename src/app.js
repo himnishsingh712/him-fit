@@ -102,13 +102,13 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
 const S = {
   days: {}, config: null, view: 'today', date: todayKey(), range: 7, open: null, cart: {}, dosaMode: null,
-  sheet: null, sync: 'loading', toast: null, user: null, authMode: 'signin', authMsg: '', authErr: '', busy: false, recovery: false,
+  sheet: null, sync: 'loading', toast: null, user: null, authMode: (() => { try { return localStorage.getItem('hf:hasAccount') ? 'signin' : 'signup'; } catch (e) { return 'signin'; } })(), authMsg: '', authErr: '', busy: false, recovery: false,
 };
 const CFG = () => Object.assign({}, DEFAULT_CONFIG, S.config || {});
 const T = k => (CFG().targets && CFG().targets[k] != null) ? CFG().targets[k] : NMAP[k]?.t;
@@ -496,11 +496,12 @@ async function onAuthSubmit(form) {
       S.authMsg = 'If that email has an account, a reset link is on its way.';
     }
   } catch (e) {
-    S.authErr = /invalid login/i.test(e.message || '') ? 'Wrong email or password.' : /not confirmed/i.test(e.message || '') ? 'Confirm your email first — check your inbox.' : (e.message || 'Something went wrong. Try again.');
+    S.authErr = /invalid login/i.test(e.message || '') ? 'No account matches that email and password. New here? Tap “Create account” below.' : /not confirmed/i.test(e.message || '') ? 'Confirm your email first — check your inbox.' : (e.message || 'Something went wrong. Try again.');
   }
   S.busy = false; render();
 }
 function startUser(u) {
+  try { localStorage.setItem('hf:hasAccount', '1'); } catch (e) {}
   S.user = u; S.busy = false; S.authErr = ''; S.authMsg = '';
   S.days = LS.get(lk('days'), {}); dirty = LS.get(lk('dirty'), {}); S.config = LS.get(lk('config'), null);
   route(); pull().then(flushAll);
