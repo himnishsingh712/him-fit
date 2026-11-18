@@ -27,4 +27,10 @@ t('hits: small chain stays at tap time', () => { const taps = [D(15), D(15, 1)];
 t('hits: catch-up of 12 lands over the last ~2 h (6 an hour)', () => { const taps = Array.from({length: 12}, (_, i) => D(17) + i * 5000); const r = placeHits(taps, D(11)); assert.equal(r.chain.n, 12); assert.ok(Math.abs(r.chain.end - r.chain.start - 2 * 3600e3) < 60e3); });
 t('hits: "since I woke" override', () => { const taps = Array.from({length: 12}, (_, i) => D(17) + i * 5000); const r = placeHits(taps, D(11), 'wake'); assert.equal(r.chain.start, D(11)); });
 t('hits: catch-up after a recent hit is at least n/10 h long', () => { const taps = [D(16, 50), ...Array.from({length: 10}, (_, i) => D(17) + i * 5000)]; const r = placeHits(taps, D(11)); assert.ok(r.chain.end - r.chain.start >= 3600e3 - 1); });
+t('nap: groggy right after, then a lift; late tiredness eased', () => {
+  const nap = {...base, naps: [{s: D(18), e: D(22)}]};
+  assert.equal(energyAt(nap, D(20)).asleep, true);
+  assert.ok(energyAt(nap, D(22, 5)).score < energyAt(nap, D(23, 30)).score, 'grogginess fades');
+  assert.ok(energyAt(nap, D(24, 30)).score > energyAt(base, D(24, 30)).score + 5, 'a nap helps late at night');
+});
 console.log(`\n${n} unit tests passed`);

@@ -54,6 +54,8 @@ const go = async h => { w.location.hash = h; await wait(40); };
   setv('[data-act=ci][data-f=w]', '69.5'); await wait(20);
   ok('weight note shows correction rule', doc.body.textContent.includes('counts as'), '');
   ok('day tags card', $$('[data-act=daytag]').length === 5);
+  setv('[data-nap=s]', '18:00', 'input'); setv('[data-nap=e]', '22:00', 'input'); click('[data-act=addnap]'); await wait(30);
+  ok('nap added and counted in sleep', doc.body.textContent.includes('4 h today') && doc.body.textContent.includes('with naps'), txt('.card .muted.small'));
   await go('#energy');
   ok('energy screen with breakdown', $('.ecard') && doc.body.textContent.includes('Day tags') && doc.body.textContent.includes('model v1'));
   await go('#nutrients'); ok('nutrients show caffeine', $$('.nrow').some(r => r.textContent.includes('Caffeine')));

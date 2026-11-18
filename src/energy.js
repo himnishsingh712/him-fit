@@ -12,6 +12,7 @@
 //   7 Alcohol: tonight's sedation, last night's hangover
 //   8 Cannabis: short lift, longer couch phase, heavy-day fog, next-morning fog; scaled by tolerance
 //   9 Day tags: sick, stressed, travel, exam, party (and yesterday's party)
+//  10 Naps: grogginess right after, a lift that fades over ~5 h, and they partly reset the 'hours awake' clock
 
 const H = 3600e3, MIN = 60e3;
 // Frozen until 16 Dec 2026 so predictions can be compared fairly with your ratings. Change one layer at a time after that.
@@ -56,10 +57,17 @@ function sessions(times, gap) {
 export function energyAt(inp, t) {
   const R = [];
   const add = (layer, key, label, v) => { if (Math.abs(v) >= 0.05) R.push({layer, key, label, v}); };
-  const a = Math.max(0, (t - inp.wake) / H); // hours awake
+  const a = Math.max(0, (t - inp.wake) / H); // hours since the main wake-up
   const sleepH = Math.max(0, (inp.wake - inp.bed) / H);
+  // naps: finished ones before t, and whether t is inside one
+  const naps = (inp.naps || []).filter(n => n.e > n.s && n.s >= inp.wake - H).sort((x, y) => x.s - y.s);
+  const asleep = naps.some(n => t >= n.s && t < n.e);
+  const done = naps.filter(n => n.e <= t); const napBefore = naps.reduce((s, n) => s + Math.max(0, Math.min(t, n.e) - n.s), 0) / H;
+  let aEff = a; // 'hours awake' for tiredness: a nap resets part of it (a 2 h nap resets 80%)
+  if (done.length) { const ln = done[done.length-1]; const nh = (ln.e - ln.s) / H, r = Math.min(0.8, nh / 2); aEff = (t - ln.e) / H + Math.max(0, (ln.s - inp.wake) / H) * (1 - r); }
+  const awakeH = Math.max(0, a - napBefore); // hours actually awake, for 'expected by now' targets
   // ---- 1 sleep foundation
-  let s1 = interp(SLEEP_PTS, sleepH); if (s1 < 0) s1 *= Math.min(1.5, 1 + 0.04 * a); // short sleep bites harder as the day goes on
+  let s1 = interp(SLEEP_PTS, sleepH); if (s1 < 0) s1 *= Math.min(1.5, 1 + 0.04 * aEff); // short sleep bites harder as the day goes on
   add('sleep', 'dur', `${sleepH.toFixed(1)} h sleep`, s1);
   const w = [0.5, 0.3, 0.2]; let debt = 0; (inp.priorSleep || []).forEach((h, i) => { if (h != null) debt += w[i] * Math.max(0, 7.5 - h); });
   let s2 = -Math.min(12, 6 * debt); if (sleepH >= 8.5) s2 *= 0.5; add('sleep', 'debt', 'Sleep debt from earlier nights', s2);
@@ -83,12 +91,13 @@ export function energyAt(inp, t) {
   add('clock', 'peak', 'Late-morning peak', 5 * gauss(a, 3, 1.5));
   add('clock', 'dip', 'Afternoon dip', -7 * gauss(a, 7, 1.3));
   add('clock', 'second', 'Evening second wind', 3 * gauss(a, 11, 1.5));
-  if (a > 13) add('clock', 'wind', `${a.toFixed(0)} h awake`, -Math.min(20, (a - 13) * 4 * (1 + debt / 3)));
+  if (aEff > 13) add('clock', 'wind', `${aEff.toFixed(0)} h awake${done.length ? ' (after your nap)' : ''}`, -Math.min(20, (aEff - 13) * 4 * (1 + debt / 3)));
   // ---- 4 fuel
   const ins = (inp.intakes || []).filter(x => x.t <= t && x.t >= inp.wake - 2 * H);
   const meals = ins.filter(x => (x.kcal || 0) >= 100);
   const lastMeal = meals.length ? Math.max(...meals.map(x => x.t)) : null;
-  const fastH = lastMeal ? (t - lastMeal) / H : Math.max(0, a - 1); // first hour after waking without food is normal
+  let fastH = lastMeal ? (t - lastMeal) / H : Math.max(0, a - 1); // first hour after waking without food is normal
+  if (lastMeal) fastH -= 0.7 * naps.reduce((s, n) => s + Math.max(0, Math.min(t, n.e) - Math.max(lastMeal, n.s)), 0) / H; // you get less hungry asleep
   add('fuel', 'fast', lastMeal ? `${fastH.toFixed(1)} h since you ate` : `Nothing eaten since waking`, interp(FAST_PTS, fastH));
   // meals within 20 minutes of each other count as one sitting
   const sit = []; [...ins].sort((x, y) => x.t - y.t).forEach(x => { const l = sit[sit.length-1]; if (l && x.t - l.t <= 20 * MIN) { for (const k of ['kcal','p','c','f','fib','sug','alc']) l[k] = (l[k] || 0) + (x[k] || 0); } else sit.push({...x}); });
@@ -108,14 +117,14 @@ export function energyAt(inp, t) {
   });
   add('fuel', 'lift', 'Sugar lift', lift); add('fuel', 'crash', 'Sugar crash', crash); add('fuel', 'coma', 'Food coma (big or fatty meal)', coma); add('fuel', 'steady', 'Steady fuel (protein, fibre)', steady);
   if (a >= 3 && inp.targets?.kcal) {
-    const exp = clamp((a - 1) / 14, 0.05, 1); const eaten = ins.reduce((s, x) => s + (x.kcal || 0), 0); const prot = ins.reduce((s, x) => s + (x.p || 0), 0);
+    const exp = clamp((awakeH - 1) / 14, 0.05, 1); const eaten = ins.reduce((s, x) => s + (x.kcal || 0), 0); const prot = ins.reduce((s, x) => s + (x.p || 0), 0);
     const r = eaten / (inp.targets.kcal * exp); add('fuel', 'adeq', `${Math.round(r * 100)}% of the food expected by now`, interp(ADEQ_PTS, r));
     const rp = prot / ((inp.targets.p || 100) * exp); if (rp < 0.75) add('fuel', 'prot', 'Low protein so far', rp < 0.5 ? -3 : -1.5);
   }
   // ---- 5 water
   if (a >= 3 && inp.targets?.water) {
     const drunk = (inp.water || []).filter(x => x.t <= t).reduce((s, x) => s + x.ml, 0);
-    const r = drunk / (inp.targets.water * clamp((a - 1) / 14, 0.1, 1)); add('water', 'water', `${Math.round(Math.min(r, 9) * 100)}% of water expected by now`, interp(WATER_PTS, r));
+    const r = drunk / (inp.targets.water * clamp((awakeH - 1) / 14, 0.1, 1)); add('water', 'water', `${Math.round(Math.min(r, 9) * 100)}% of water expected by now`, interp(WATER_PTS, r));
   }
   // ---- 6 caffeine
   const cl = caffeineLevel(inp.caffeine || [], t);
@@ -134,6 +143,11 @@ export function energyAt(inp, t) {
   const hitsSoFar = (inp.hits || []).filter(h => h <= t).length; if (hitsSoFar > 6) add('cannabis', 'fog', `${hitsSoFar} hits today (fog)`, -Math.min(10, 0.8 * (hitsSoFar - 6)));
   if (inp.lastNight?.lateHits) add('cannabis', 'morningfog', 'Late-night hits', -Math.min(10, 1.2 * inp.lastNight.lateHits) * clamp(1 - a / 6, 0, 1));
   if ((inp.lastNight?.totalHits || 0) > 10 && a < 4) add('cannabis', 'heavyday', 'Heavy smoking yesterday', -3);
+  // ---- 10 naps
+  done.forEach(n => { const nh = (n.e - n.s) / H, since = (t - n.e) / MIN;
+    const depth = nh < 0.5 ? 6 : nh < 1 ? 10 : 15, dur = nh < 0.5 ? 10 : nh < 1 ? 25 : 40;
+    if (since < dur) add('nap', 'napgrog', 'Waking from a nap (grogginess)', -depth * (1 - since / dur));
+    add('nap', 'napboost', `${nh.toFixed(1)} h nap`, Math.min(10, 5 * nh) * Math.exp(-since / 60 / 5)); });
   // ---- 9 day tags
   const tg = inp.tags || [];
   if (tg.includes('sick')) add('tags', 'sick', 'Sick today', -12);
@@ -143,7 +157,7 @@ export function energyAt(inp, t) {
   if (tg.includes('party') && a >= 10) add('tags', 'party', 'Party night', 4);
   if ((inp.yTags || []).includes('party')) add('tags', 'yparty', "Last night's party", -6 * clamp(1 - a / 6, 0, 1));
   const raw = 75 + R.reduce((s, x) => s + x.v, 0);
-  return {t, score: clamp(Math.round(raw), 5, 98), parts: R};
+  return {t, score: clamp(Math.round(raw), 5, 98), parts: R, asleep};
 }
 
 export const band = s => s >= 85 ? {c:'g', n:'Peak'} : s >= 70 ? {c:'g', n:'Charged'} : s >= 55 ? {c:'y', n:'Steady'} : s >= 45 ? {c:'y', n:'Flat'} : s >= 30 ? {c:'r', n:'Low'} : {c:'r', n:'Drained'};
@@ -153,12 +167,12 @@ export const ratingBand = s => s >= 80 ? 5 : s >= 65 ? 4 : s >= 50 ? 3 : s >= 35
 export function energyDay(inp, now, endMs) {
   const pts = []; for (let t = inp.wake; t <= endMs; t += 10 * MIN) pts.push(energyAt(inp, t));
   const cur = energyAt(inp, clamp(now, inp.wake, endMs));
-  const phase = (from, to) => { const xs = pts.filter(p => p.t >= from && p.t < to); if (!xs.length) return null; return {score: Math.round(xs.reduce((s, p) => s + p.score, 0) / xs.length), past: to <= now, now: from <= now && now < to}; };
+  const phase = (from, to) => { const xs = pts.filter(p => p.t >= from && p.t < to && !p.asleep); if (!xs.length) return null; return {score: Math.round(xs.reduce((s, p) => s + p.score, 0) / xs.length), past: to <= now, now: from <= now && now < to}; };
   const d0 = new Date(inp.wake); const at = h => new Date(d0.getFullYear(), d0.getMonth(), d0.getDate(), h).getTime();
   const phases = [{n:'Morning', v: phase(inp.wake, at(13))}, {n:'Afternoon', v: phase(Math.max(inp.wake, at(13)), at(18))}, {n:'Evening', v: phase(Math.max(inp.wake, at(18)), endMs + 1)}];
   // what would help: simulate a change now and see the score 90 min later
   const help = [];
-  if (now < endMs - H) {
+  if (now < endMs - H && !cur.asleep) {
     const later = Math.min(endMs, now + 90 * MIN); const base = energyAt(inp, later).score;
     const tryIt = (label, patch) => { const g = energyAt({...inp, ...patch(inp)}, later).score - base; if (g >= 3) help.push({label, gain: g}); };
     tryIt('Eat a proper meal (~500 kcal with protein)', i => ({intakes: [...(i.intakes || []), {t: now, kcal: 500, p: 30, c: 60, f: 15, fib: 6, sug: 8}]}));
