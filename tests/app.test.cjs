@@ -66,6 +66,7 @@ const go = async h => { w.location.hash = h; await wait(40); };
   await go('#nutrients'); ok('nutrients show caffeine', $$('.nrow').some(r => r.textContent.includes('Caffeine')));
   await go('#trends'); ok('trends render with weekday/weekend card', doc.body.textContent.includes('Weekdays vs weekends'));
   await go('#me'); ok('Me shows daily target', doc.body.textContent.includes('Daily target'));
+  ok('physique card', doc.body.textContent.includes('Physique and potential') && doc.body.textContent.includes('Well-trained natural'));
   ok('Me shows Navy and RFM body fat and measurements', doc.body.textContent.includes('RFM') && doc.body.textContent.includes('Navy') && doc.body.textContent.includes('Upper arm'));
   click('#sync'); await wait(20);
   for (const id of ['days', 'food', 'drinks', 'json']) { click(`[data-act=export][data-id=${id}]`); await wait(10); }

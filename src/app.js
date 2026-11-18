@@ -133,7 +133,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.5.5';
+const APP_VERSION = '1.5.6';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -160,6 +160,31 @@ function tapeCard(k) {
   const ci = S.days[k]?.ci || {}; const lt = lastTapeKey();
   return `<div class="card"><div class="row"><div><h2>Tape measure</h2><div class="muted small">Once or twice a month, morning, same spots. ${lt ? `Last: ${shortDate(lt)}.` : 'Not measured yet.'} Body fat, lean mass and where your gain lands show on the Me tab.</div></div></div>
     <div class="g2">${tapeFields().map(([f, n, how]) => `<label class="fl">${n} (inches)<input class="num" style="width:100%" type="number" inputmode="decimal" step="0.25" value="${ci[f] ? toIn(ci[f]) : ''}" placeholder="—" data-act="tapein" data-f="${f}"><span class="muted" style="font-weight:400;font-size:11px">${how}</span></label>`).join('')}</div></div>`;
+}
+// Physique and potential: what the numbers imply. Fixed assumptions, stated on screen.
+function physiqueCard(p, b) {
+  if (b.bf == null || b.lean == null) return '';
+  const h2 = (p.heightCm / 100) ** 2, adj = 6.1 * (1.8 - p.heightCm / 100); const ffmiOf = lean => lean / h2 + adj; const leanAt = f => (f - adj) * h2;
+  const fat = b.kg - b.lean; let h = '';
+  // target implies (2/3 of gain as muscle on a lean bulk; heavy bulk 1/2; losses: 1/4 from muscle)
+  if (p.targetKg) { const dW = p.targetKg - b.kg; const share = dW >= 0 ? (p.goal === 'heavybulk' ? 0.5 : 2 / 3) : 0.25; const lean2 = b.lean + dW * share, fat2 = fat + dW * (1 - share);
+    h += `<div class="row small"><span>At your target of <b>${p.targetKg} kg</b></span><span><b>FFMI ${ffmiOf(lean2).toFixed(1)}</b> · ~${(fat2 / p.targetKg * 100).toFixed(0)}% fat</span></div><div class="muted small">Assumes ${dW >= 0 ? `${Math.round(share * 100)}% of the gain is muscle (typical for a beginner on a ${p.goal === 'heavybulk' ? 'heavy' : 'lean'} bulk)` : 'a quarter of the loss comes from muscle'}.</div>`; }
+  h += `<div class="row small"><span>Well-trained natural (FFMI 22, after years)</span><span><b>${leanAt(22).toFixed(0)} kg lean</b> · +${(leanAt(22) - b.lean).toFixed(0)} kg from now</span></div>`;
+  h += `<div class="muted small">Beginners can gain roughly 0.5–1 kg of muscle a month in the first year; it slows after that. FFMI 25 is about the natural ceiling.</div>`;
+  // proportions
+  const t = k => { const sr = tapeSeries(k); return sr.length ? sr[sr.length-1].v : null; };
+  const ch = t('chest'), wa = t('waist'), ar = t('arm'), ca = t('calf'), ne = t('neck');
+  if (ch && wa) h += `<div class="row small"><span>Chest-to-waist</span><span><b>${(ch / wa).toFixed(2)}</b> <span class="muted">· athletic look ~1.2+</span></span></div>`;
+  if (ar && ca && ne) { const mx = Math.max(ar, ca, ne); const lag = [['arm', ar], ['calf', ca], ['neck', ne]].sort((x, y) => x[1] - y[1])[0];
+    h += `<div class="row small"><span>Arm · calf · neck</span><span><b>${toIn(ar)}″ · ${toIn(ca)}″ · ${toIn(ne)}″</b></span></div><div class="muted small">Classic balance is flexed arm ≈ calf ≈ neck. Furthest behind: <b>${lag[0]}</b> (${toIn(mx - lag[1])}″ short of the biggest).</div>`; }
+  // gain composition between the first and latest full tape checks
+  const fulls = allKeys().filter(k => S.days[k]?.ci?.waist > 0 && S.days[k]?.ci?.neck > 0);
+  if (fulls.length >= 2 && (parseKey(fulls[fulls.length-1]) - parseKey(fulls[0])) / 864e5 >= 14) {
+    const at = k => { const bb = bodyNow(p, ctxFor(k)); return bb.bf != null ? {kg: bb.kg, lean: bb.lean, fat: bb.kg - bb.lean} : null; };
+    const a = at(fulls[0]), z = at(fulls[fulls.length-1]);
+    if (a && z && Math.abs(z.kg - a.kg) >= 0.5) { const dl = z.lean - a.lean, df = z.fat - a.fat;
+      h += `<div class="flag ${df > dl && z.kg > a.kg ? 'warn' : 'info'}"><div><strong>Since ${shortDate(fulls[0])}:</strong> ${(z.kg - a.kg >= 0 ? '+' : '')}${(z.kg - a.kg).toFixed(1)} kg = ${(dl >= 0 ? '+' : '')}${dl.toFixed(1)} kg lean, ${(df >= 0 ? '+' : '')}${df.toFixed(1)} kg fat. Tape estimates: trust the direction more than the decimals.</div></div>`; } }
+  return `<div class="card span2"><div class="row"><h2>Physique and potential</h2><span class="small muted">lean ${b.lean.toFixed(1)} kg · fat ${fat.toFixed(1)} kg</span></div>${h}</div>`;
 }
 function tapeProgress() {
   const p = PROF(); if (!p) return '';
@@ -845,6 +870,7 @@ function viewMe() {
     ${tl('BMR', fmt(b.bmrNow,'kcal'), 'kcal at full rest')}
     ${tl('Waist / height', b.whtr != null ? b.whtr.toFixed(2) : '—', b.whtr != null ? (b.whtr < 0.5 ? 'healthy, under 0.5' : 'above 0.5: belly fat risk') : 'needs waist')}
     ${tl('BMI', b.bmi.toFixed(1), bmiBand(b.bmi) + ' · ignores muscle')}</div></div>`;
+  h += physiqueCard(p, b);
   h += tapeProgress();
   const pct = Math.round(pl.blend * 100);
   h += `<div class="card span2"><div class="row"><h2>Your calories, step by step</h2><span class="small muted">week of ${shortDate(pl.weekStart)}</span></div>
