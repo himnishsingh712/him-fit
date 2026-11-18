@@ -99,3 +99,9 @@ button.status{background:none;border:none;padding:4px 0;cursor:pointer;min-heigh
 .field:focus,.num:focus,button:focus-visible,a:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .btn:disabled{opacity:.6}
 nav.bottom{padding-bottom:max(14px,env(safe-area-inset-bottom))}
+
+input.qn{width:52px;height:44px;border:none;background:transparent;text-align:center;font-family:var(--head);font-size:18px;font-weight:700;color:var(--text);-moz-appearance:textfield;padding:0}
+input.qn::-webkit-outer-spin-button,input.qn::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input.qn.zero{color:var(--muted)}
+input.qn:focus{outline:2px solid var(--acc);border-radius:8px}
+.stepper button:disabled{opacity:.35;cursor:default}
