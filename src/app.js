@@ -133,7 +133,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.5.3';
+const APP_VERSION = '1.5.4';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -778,7 +778,7 @@ function logTargetChange() {
 }
 // ================= profile: setup + Me =================
 const PF_DEFAULT = {name:'', dob:'', sex:'m', heightCm:'', weightKg:'', waist:'', neck:'', hip:'', experience:'new', trainDays:4, sessionMin:60, activity:'sit', diet:'egg', wake:'09:00', bed:'01:00', goal:'leanbulk', targetKg:'', pace:0.25};
-function startSetup() { const p = PROF(); S.pf = Object.assign({}, PF_DEFAULT, p || {}); const w = weightList(); if (w.length) S.pf.weightKg = w[w.length-1].w; const tp = tapeAt(todayKey()); if (tp) { S.pf.waist = tp.waist; S.pf.neck = tp.neck; S.pf.hip = tp.hip || ''; } S.pfTape = tp; }
+function startSetup() { const p = PROF(); S.pf = Object.assign({}, PF_DEFAULT, p || {}); const w = weightList(); if (w.length) S.pf.weightKg = w[w.length-1].w; const tp = {}; [...TAPE, ['hip']].forEach(([f]) => { const sr = tapeSeries(f); if (sr.length) { tp[f] = sr[sr.length-1].v; S.pf[f] = tp[f]; } }); S.pfTape = tp; }
 const num = v => v === '' || v == null ? null : +v;
 function pfPreview() {
   const p = S.pf; const kg = num(p.weightKg), h = num(p.heightCm), age = ageAt(p.dob, todayKey());
@@ -796,7 +796,7 @@ function viewSetup() {
   h += `<div class="card span2"><h2>Basics</h2><div class="g2">${inp('name','Name','text','autocomplete="given-name"')}${inp('dob','Date of birth','date')}</div>
     <div class="fl">Sex<div class="btns c2">${opt('sex','m','Male')}${opt('sex','f','Female')}</div></div>
     <div class="g2">${inp('heightCm','Height (cm)','number','inputmode="decimal" step="0.5" min="120" max="230"')}${inp('weightKg','Weight today (kg)','number','inputmode="decimal" step="0.1" min="30" max="250"')}</div></div>`;
-  h += `<div class="card span2"><h2>Tape measure <span class="muted small" style="font-weight:500">optional</span></h2><div class="muted small">Gives a real body-fat % (US Navy method). Waist: at the navel, relaxed, tape level. Neck: just below the Adam's apple. You can also add these later in Check-in.</div><div class="g2">${inp('waist','Waist (cm)','number','inputmode="decimal" step="0.5"')}${inp('neck','Neck (cm)','number','inputmode="decimal" step="0.5"')}</div>${p.sex === 'f' ? inp('hip','Hips, widest point (cm)','number','inputmode="decimal" step="0.5"') : ''}</div>`;
+  h += `<div class="card span2"><h2>Tape measure <span class="muted small" style="font-weight:500">optional</span></h2><div class="muted small">Six spots, about 5 minutes. Gives body fat (Navy + RFM), lean mass, and where your gain lands. You can also add or update these in Check-in.</div><div class="g2">${(p.sex === 'f' ? [...TAPE, ['hip','Hips','widest point']] : TAPE).map(([f, n, how]) => `<label class="fl">${n} (cm)<input class="field" data-pf="${f}" type="number" inputmode="decimal" step="0.5" value="${esc(p[f] ?? '')}"><span class="muted" style="font-weight:400;font-size:11px">${how}</span></label>`).join('')}</div></div>`;
   h += `<div class="card span2"><h2>Activity</h2>
     <div class="fl">Outside the gym<div class="btns c1">${ACTIVITY.map(a => opt('activity', a.id, a.n, a.d)).join('')}</div></div>
     <div class="fl">Training days a week<div class="btns c8">${[0,1,2,3,4,5,6,7].map(n => opt('trainDays', n, n)).join('')}</div></div>
@@ -822,10 +822,9 @@ function savePF() {
   out.updatedAt = new Date().toISOString();
   const k = todayKey(), d = day(k); d.ci = d.ci || {};
   if (!d.ci.w) d.ci.w = out.weightKg;
-  const tp = S.pfTape; const sameTape = tp && tp.waist === out.waist && tp.neck === out.neck && (tp.hip || null) === (out.hip || null);
-  if (out.waist && out.neck && !sameTape) { d.ci.waist = out.waist; d.ci.neck = out.neck; if (out.hip) d.ci.hip = out.hip; }
+  const tp = S.pfTape || {}; [...TAPE, ['hip']].forEach(([f]) => { const v = num(p[f]); if (v && v !== tp[f]) d.ci[f] = v; });
   if (PROF() && out.weightKg !== +PROF().weightKg) d.ci.w = out.weightKg;
-  delete out.waist; delete out.neck; delete out.hip; // measurements live in the daily log, so they have dates
+  [...TAPE, ['hip']].forEach(([f]) => delete out[f]); // measurements live in the daily log, so they have dates
   const cfg = Object.assign({}, S.config || {}, {profile: out});
   const ch = (cfg.changes || []).slice(); ch.push({date: k, text: `Profile ${PROF() ? 'updated' : 'set'}: ${GMAP[out.goal].n}, target ${out.targetKg} kg at ${out.pace >= 0 ? '+' : ''}${out.pace} kg/week`}); cfg.changes = ch;
   touch(k); saveConfig(cfg); return null;

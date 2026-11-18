@@ -24,6 +24,7 @@ const go = async h => { w.location.hash = h; await wait(40); };
   ok('setup opens on first sign-in', txt('h1') === 'About you');
   ok('no bottom nav during setup', !$('nav.bottom'));
   for (const [k, v] of [['name','Him'],['dob','2004-05-10'],['heightCm','181'],['weightKg','66'],['targetKg','72']]) setv(`[data-pf="${k}"]`, v, 'input');
+  ok('setup asks all six tape spots', ['waist','neck','chest','arm','thigh','calf'].every(f => $(`[data-pf=${f}]`)));
   ok('live preview', txt('#pfprev').includes('2,530'), txt('#pfprev'));
   click('[data-act=pfsave]'); await wait(200);
   ok('profile saved to server', !!w.__mock.db.config[0]?.data.profile);
