@@ -83,7 +83,7 @@ Each morning you rate yesterday (1–5). The app stores its own prediction for y
 Check-in → "Naps & daytime sleep": add start and end times (any number per day). They add to the day's sleep total (Check-in, Today, weekly review, export `nap_h`) and count 70% toward sleep debt. In the energy score: no score while asleep (the curve breaks); grogginess after waking (6–15 points for 10–40 min, by nap length); a lift up to +10 that fades over ~5 h; part of the 'hours awake' clock resets (a 2 h nap resets 80%); time asleep is left out of 'food or water expected by now', and fasting time counts 30% while asleep.
 
 ## Tape measurements (v1.5.3)
-Six spots, once or twice a month (Check-in): waist (navel), neck, chest (nipple level), upper arm (right, flexed), mid-thigh (right), calf (right). Hips too for women.
+Six spots, whenever you like (Me tab → Measurements → Update measurements, with a date; not in Check-in or the profile form): waist (navel), neck, chest (nipple level), upper arm (right, flexed), mid-thigh (right), calf (right). Hips too for women.
 - Body fat = average of the US Navy method (waist + neck) and Relative Fat Mass (RFM = 64 − 20 × height ÷ waist for men, 76 − … for women). Both are shown. Lean mass and FFMI use the average.
 - Measurements card on Me: each spot's change since the first measurement, plus waist-per-kg: cm of waist gained per kg gained. ≤0.7 mostly lean, 0.7–1.0 watch, >1.0 the surplus is too big.
-- Today shows a reminder when the last tape check is 30+ days old.
+- No reminder: measure whenever you choose.

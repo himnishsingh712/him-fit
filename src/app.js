@@ -133,7 +133,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.5.6';
+const APP_VERSION = '1.5.7';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -156,46 +156,24 @@ const tapeFields = () => PROF()?.sex === 'f' ? [...TAPE, ['hip','Hips','widest p
 const IN = 2.54; const toIn = cm => Math.round(cm / IN * 4) / 4; const inStr = cm => `${toIn(cm)}″`;
 function tapeSeries(f) { return allKeys().filter(k => S.days[k]?.ci?.[f] > 0).map(k => ({k, v: +S.days[k].ci[f]})); }
 function lastTapeKey() { const ks = allKeys().filter(k => tapeFields().some(([f]) => S.days[k]?.ci?.[f] > 0)); return ks[ks.length-1] || null; }
-function tapeCard(k) {
-  const ci = S.days[k]?.ci || {}; const lt = lastTapeKey();
-  return `<div class="card"><div class="row"><div><h2>Tape measure</h2><div class="muted small">Once or twice a month, morning, same spots. ${lt ? `Last: ${shortDate(lt)}.` : 'Not measured yet.'} Body fat, lean mass and where your gain lands show on the Me tab.</div></div></div>
-    <div class="g2">${tapeFields().map(([f, n, how]) => `<label class="fl">${n} (inches)<input class="num" style="width:100%" type="number" inputmode="decimal" step="0.25" value="${ci[f] ? toIn(ci[f]) : ''}" placeholder="—" data-act="tapein" data-f="${f}"><span class="muted" style="font-weight:400;font-size:11px">${how}</span></label>`).join('')}</div></div>`;
-}
-// Physique and potential: what the numbers imply. Fixed assumptions, stated on screen.
-function physiqueCard(p, b) {
-  if (b.bf == null || b.lean == null) return '';
-  const h2 = (p.heightCm / 100) ** 2, adj = 6.1 * (1.8 - p.heightCm / 100); const ffmiOf = lean => lean / h2 + adj; const leanAt = f => (f - adj) * h2;
-  const fat = b.kg - b.lean; let h = '';
-  // target implies (2/3 of gain as muscle on a lean bulk; heavy bulk 1/2; losses: 1/4 from muscle)
-  if (p.targetKg) { const dW = p.targetKg - b.kg; const share = dW >= 0 ? (p.goal === 'heavybulk' ? 0.5 : 2 / 3) : 0.25; const lean2 = b.lean + dW * share, fat2 = fat + dW * (1 - share);
-    h += `<div class="row small"><span>At your target of <b>${p.targetKg} kg</b></span><span><b>FFMI ${ffmiOf(lean2).toFixed(1)}</b> · ~${(fat2 / p.targetKg * 100).toFixed(0)}% fat</span></div><div class="muted small">Assumes ${dW >= 0 ? `${Math.round(share * 100)}% of the gain is muscle (typical for a beginner on a ${p.goal === 'heavybulk' ? 'heavy' : 'lean'} bulk)` : 'a quarter of the loss comes from muscle'}.</div>`; }
-  h += `<div class="row small"><span>Well-trained natural (FFMI 22, after years)</span><span><b>${leanAt(22).toFixed(0)} kg lean</b> · +${(leanAt(22) - b.lean).toFixed(0)} kg from now</span></div>`;
-  h += `<div class="muted small">Beginners can gain roughly 0.5–1 kg of muscle a month in the first year; it slows after that. FFMI 25 is about the natural ceiling.</div>`;
-  // proportions
-  const t = k => { const sr = tapeSeries(k); return sr.length ? sr[sr.length-1].v : null; };
-  const ch = t('chest'), wa = t('waist'), ar = t('arm'), ca = t('calf'), ne = t('neck');
-  if (ch && wa) h += `<div class="row small"><span>Chest-to-waist</span><span><b>${(ch / wa).toFixed(2)}</b> <span class="muted">· athletic look ~1.2+</span></span></div>`;
-  if (ar && ca && ne) { const mx = Math.max(ar, ca, ne); const lag = [['arm', ar], ['calf', ca], ['neck', ne]].sort((x, y) => x[1] - y[1])[0];
-    h += `<div class="row small"><span>Arm · calf · neck</span><span><b>${toIn(ar)}″ · ${toIn(ca)}″ · ${toIn(ne)}″</b></span></div><div class="muted small">Classic balance is flexed arm ≈ calf ≈ neck. Furthest behind: <b>${lag[0]}</b> (${toIn(mx - lag[1])}″ short of the biggest).</div>`; }
-  // gain composition between the first and latest full tape checks
-  const fulls = allKeys().filter(k => S.days[k]?.ci?.waist > 0 && S.days[k]?.ci?.neck > 0);
-  if (fulls.length >= 2 && (parseKey(fulls[fulls.length-1]) - parseKey(fulls[0])) / 864e5 >= 14) {
-    const at = k => { const bb = bodyNow(p, ctxFor(k)); return bb.bf != null ? {kg: bb.kg, lean: bb.lean, fat: bb.kg - bb.lean} : null; };
-    const a = at(fulls[0]), z = at(fulls[fulls.length-1]);
-    if (a && z && Math.abs(z.kg - a.kg) >= 0.5) { const dl = z.lean - a.lean, df = z.fat - a.fat;
-      h += `<div class="flag ${df > dl && z.kg > a.kg ? 'warn' : 'info'}"><div><strong>Since ${shortDate(fulls[0])}:</strong> ${(z.kg - a.kg >= 0 ? '+' : '')}${(z.kg - a.kg).toFixed(1)} kg = ${(dl >= 0 ? '+' : '')}${dl.toFixed(1)} kg lean, ${(df >= 0 ? '+' : '')}${df.toFixed(1)} kg fat. Tape estimates: trust the direction more than the decimals.</div></div>`; } }
-  return `<div class="card span2"><div class="row"><h2>Physique and potential</h2><span class="small muted">lean ${b.lean.toFixed(1)} kg · fat ${fat.toFixed(1)} kg</span></div>${h}</div>`;
+function tapeSheet() {
+  const sh = S.sheet;
+  return `<div class="sheetbg" data-act="closesheet"><div class="sheet tall" role="dialog" aria-label="Update measurements" data-stop="1"><div class="row"><h3>Measurements</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>
+    <div class="muted small">Inches. Pre-filled with your last values; change the ones you re-measured. Morning, before food, same spots.</div>
+    <label class="fl">Measured on<input class="field" type="date" value="${sh.date}" max="${todayKey()}" data-tapedate="1"></label>
+    <div class="g2">${tapeFields().map(([f, n, how]) => `<label class="fl">${n}<input class="field" type="number" inputmode="decimal" step="0.25" value="${sh.vals[f] ?? ''}" placeholder="—" data-tape="${f}"><span class="muted" style="font-weight:400;font-size:11px">${how}</span></label>`).join('')}</div>
+    <button class="btn primary" data-act="tapesave">Save</button></div></div>`;
 }
 function tapeProgress() {
   const p = PROF(); if (!p) return '';
   const rows = tapeFields().map(([f, n]) => { const sr = tapeSeries(f); if (!sr.length) return null; const a = sr[0], b = sr[sr.length-1]; return {f, n, first: a, last: b, d: b.v - a.v}; }).filter(Boolean);
-  if (!rows.length) return `<div class="card span2"><h2>Measurements</h2><div class="muted small">No tape measurements yet. Add them in Check-in: waist, neck, chest, upper arm, mid-thigh, calf.</div></div>`;
+  if (!rows.length) return `<div class="card span2"><h2>Measurements</h2><div class="muted small">No tape measurements yet: waist, neck, chest, upper arm, mid-thigh, calf.</div><button class="btn primary" data-act="tapeopen">Add measurements</button></div>`;
   // waist gained per kg gained since the first waist measurement (lean-bulk guardrail)
   let guard = ''; const ws = tapeSeries('waist');
   if (ws.length >= 2) { const wl = weightList(); const near = k => { const xs = wl.filter(x => Math.abs(parseKey(x.k) - parseKey(k)) <= 3 * 864e5); return xs.length ? mean(xs.map(x => x.w)) : null; };
     const w0 = near(ws[0].k), w1 = near(ws[ws.length-1].k); if (w0 && w1 && Math.abs(w1 - w0) >= 1) { const r = (ws[ws.length-1].v - ws[0].v) / (w1 - w0);
       guard = `<div class="flag ${w1 > w0 ? (r > 1 ? 'warn' : 'info') : 'info'}"><div><strong>${r >= 0 ? '+' : ''}${(r / IN).toFixed(2)}″ of waist per kg ${w1 > w0 ? 'gained' : 'lost'}</strong> since ${shortDate(ws[0].k)} (${(w1 - w0 >= 0 ? '+' : '')}${(w1 - w0).toFixed(1)} kg). ${w1 > w0 ? (r <= 0.7 ? 'Mostly lean gain.' : r <= 1 ? 'Some fat coming with it. Fine, keep an eye on it.' : 'Waist is growing too fast for the weight. The surplus is probably too big.') : ''}</div></div>`; } }
-  return `<div class="card span2"><div class="row"><h2>Measurements</h2><span class="small muted">since first measurement</span></div>${guard}
+  return `<div class="card span2"><div class="row"><h2>Measurements</h2><button class="pill" data-act="tapeopen">Update measurements</button></div><div class="muted small">Change since your first measurement.</div>${guard}
     <div class="list">${rows.map(r => `<div class="li"><div class="main"><div class="t">${r.n}</div><div class="s">${inStr(r.first.v)} (${shortDate(r.first.k)}) → ${inStr(r.last.v)} (${shortDate(r.last.k)})</div></div><div class="num"><b style="color:${r.d === 0 ? 'var(--muted)' : (r.f === 'waist' ? (r.d > 0 ? 'var(--acc)' : 'var(--ok)') : (r.d > 0 ? 'var(--ok)' : 'var(--acc)'))}">${r.d > 0 ? '+' : ''}${(r.d / IN).toFixed(2)}″</b></div></div>`).join('')}</div>
     <div class="muted small">Tape error is about ¼–½ inch, so changes under ½ inch are noise. Rule of thumb on a bulk: up to 0.28″ of waist per kg gained is mostly lean; over 0.4″ per kg means too much fat.</div></div>`;
 }
@@ -293,7 +271,6 @@ function flags(k) {
     const y1 = addDays(k, -1), y2 = addDays(k, -2);
     if (y2 >= start && suppDue(s.id, y1) && suppDue(s.id, y2) && !S.days[y1]?.supp?.[s.id] && !S.days[y2]?.supp?.[s.id]) out.push({t:'warn', h:`${s.name} missed`, b:'2 days running.'});
   });
-  if (PROF() && k === todayKey()) { const lt = lastTapeKey(); const age = lt ? (parseKey(k) - parseKey(lt)) / 864e5 : null; if (lt == null || age >= 30) out.push({t:'info', h: lt ? 'Tape check due' : 'First tape check', b: lt ? `Last measured ${Math.round(age)} days ago. Six spots in Check-in, about 5 minutes.` : 'Waist, neck, chest, arm, thigh, calf in Check-in. About 5 minutes, once or twice a month.'}); }
   (cfg.upcoming || []).forEach(u => { const diff = (parseKey(u.date) - parseKey(k)) / 864e5; if (diff >= 0 && diff <= 7) out.push({t:'info', h: diff === 0 ? 'Today' : `In ${diff} day${diff>1?'s':''}`, b: u.text}); });
   return out;
 }
@@ -474,7 +451,7 @@ function viewCheckin() {
   let h = header('Check-in');
   h += `<div class="grid">`;
   h += `<div class="card"><div class="row"><label for="w"><h2>Weight</h2><div class="muted small">${ci.w && ci.wt ? (() => { const ha = weightHoursAwake(k); const pc = weightCorrPct(ha); return pc ? `Weighed ${ha.toFixed(0)} h after waking: counts as <b>${weightCorr(k).toFixed(1)} kg</b> (−${(pc * 100).toFixed(1)}%)` : 'Weighed soon after waking: counts as is'; })() : 'Any time; corrected to a morning number by hours since waking'}</div></label><span style="display:flex;align-items:center;gap:6px"><input id="w" class="num" type="number" inputmode="decimal" step="0.1" min="30" max="200" value="${ci.w ?? ''}" placeholder="—" data-act="ci" data-f="w"><span class="muted">kg</span></span></div>${lastWeightNote(k)}</div>`;
-  h += tapeCard(k);
+
   { const mc = ci.mc && !ci.mc.skipped ? ci.mc : null; const p = PROF() || {}; h += `<div class="card"><div class="row"><div><h2>Sleep last night</h2><div class="muted small">${ci.sl != null ? `<b>${ci.sl} h</b> · worked out from your times${napHours(ci) ? ` · <b>${(ci.sl + napHours(ci)).toFixed(1)} h</b> with naps` : ''}` : 'Set the times; hours are worked out for you'}</div></div></div><div class="g2"><label class="fl">Went to sleep<input class="field" type="time" value="${mc?.bed || p.bed || '01:00'}" data-act="sleeptime" data-f="bed"></label><label class="fl">Woke up<input class="field" type="time" value="${mc?.wake || p.wake || '09:00'}" data-act="sleeptime" data-f="wake"></label></div></div>`; }
   h += napCard(k);
   h += `<div class="card"><h2>Day tags</h2>${tagRow(ci.tags || [], 'daytag')}<div class="muted small">Count in your energy score. Sick and travel days are left out of maintenance and insights.</div></div>`;
@@ -804,7 +781,7 @@ function logTargetChange() {
 }
 // ================= profile: setup + Me =================
 const PF_DEFAULT = {name:'', dob:'', sex:'m', heightCm:'', weightKg:'', waist:'', neck:'', hip:'', experience:'new', trainDays:4, sessionMin:60, activity:'sit', diet:'egg', wake:'09:00', bed:'01:00', goal:'leanbulk', targetKg:'', pace:0.25};
-function startSetup() { const p = PROF(); S.pf = Object.assign({}, PF_DEFAULT, p || {}); const w = weightList(); if (w.length) S.pf.weightKg = w[w.length-1].w; const tp = {}; [...TAPE, ['hip']].forEach(([f]) => { const sr = tapeSeries(f); if (sr.length) { tp[f] = toIn(sr[sr.length-1].v); S.pf[f] = tp[f]; } }); S.pfTape = tp; }
+function startSetup() { const p = PROF(); S.pf = Object.assign({}, PF_DEFAULT, p || {}); const w = weightList(); if (w.length) S.pf.weightKg = w[w.length-1].w; }
 const num = v => v === '' || v == null ? null : +v;
 function pfPreview() {
   const p = S.pf; const kg = num(p.weightKg), h = num(p.heightCm), age = ageAt(p.dob, todayKey());
@@ -822,7 +799,6 @@ function viewSetup() {
   h += `<div class="card span2"><h2>Basics</h2><div class="g2">${inp('name','Name','text','autocomplete="given-name"')}${inp('dob','Date of birth','date')}</div>
     <div class="fl">Sex<div class="btns c2">${opt('sex','m','Male')}${opt('sex','f','Female')}</div></div>
     <div class="g2">${inp('heightCm','Height (cm)','number','inputmode="decimal" step="0.5" min="120" max="230"')}${inp('weightKg','Weight today (kg)','number','inputmode="decimal" step="0.1" min="30" max="250"')}</div></div>`;
-  h += `<div class="card span2"><h2>Tape measure <span class="muted small" style="font-weight:500">optional</span></h2><div class="muted small">Six spots, about 5 minutes. Gives body fat (Navy + RFM), lean mass, and where your gain lands. You can also add or update these in Check-in.</div><div class="g2">${(p.sex === 'f' ? [...TAPE, ['hip','Hips','widest point']] : TAPE).map(([f, n, how]) => `<label class="fl">${n} (inches)<input class="field" data-pf="${f}" type="number" inputmode="decimal" step="0.25" value="${esc(p[f] ?? '')}"><span class="muted" style="font-weight:400;font-size:11px">${how}</span></label>`).join('')}</div></div>`;
   h += `<div class="card span2"><h2>Activity</h2>
     <div class="fl">Outside the gym<div class="btns c1">${ACTIVITY.map(a => opt('activity', a.id, a.n, a.d)).join('')}</div></div>
     <div class="fl">Training days a week<div class="btns c8">${[0,1,2,3,4,5,6,7].map(n => opt('trainDays', n, n)).join('')}</div></div>
@@ -848,7 +824,6 @@ function savePF() {
   out.updatedAt = new Date().toISOString();
   const k = todayKey(), d = day(k); d.ci = d.ci || {};
   if (!d.ci.w) d.ci.w = out.weightKg;
-  const tp = S.pfTape || {}; [...TAPE, ['hip']].forEach(([f]) => { const v = num(p[f]); if (v && v !== tp[f]) d.ci[f] = Math.round(v * IN * 10) / 10; });
   if (PROF() && out.weightKg !== +PROF().weightKg) d.ci.w = out.weightKg;
   [...TAPE, ['hip']].forEach(([f]) => delete out[f]); // measurements live in the daily log, so they have dates
   const cfg = Object.assign({}, S.config || {}, {profile: out});
@@ -943,6 +918,7 @@ function sheetHTML() {
       <button class="btn primary" data-act="savedrink">Add to ${S.date === todayKey() ? 'today' : shortDate(S.date)}</button></div></div>`;
   }
   if (sh.type === 'energy') return energySheet();
+  if (sh.type === 'tape') return tapeSheet();
   if (sh.type === 'account') {
     return `<div class="sheetbg" data-act="closesheet"><div class="sheet" role="dialog" aria-label="Account" data-stop="1"><div class="row"><h3>Account</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>
       <div><div class="muted small">Signed in as</div><div style="font-weight:600">${esc(S.user?.email)}</div></div>
@@ -1085,6 +1061,10 @@ document.addEventListener('click', e => {
     case 'export': exportData(id); break;
     case 'addnap': { const dr = S.napDraft || {s: hhmm(Date.now() - 3600e3), e: hhmm(Date.now())}; let st = atClock(k, dr.s), en = atClock(k, dr.e); if (en <= st) en += 864e5; if (en - st > 10 * 3600e3) { toast('That nap is over 10 h — check the times'); break; } d.ci = d.ci || {}; d.ci.naps = d.ci.naps || []; d.ci.naps.push({id: uid(), s: st, e: en}); S.napDraft = null; touch(k); toast(`Nap added · ${fmtH((en - st) / 3600e3)}`); break; }
     case 'delnap': d.ci.naps = (d.ci.naps || []).filter(n => n.id !== id); touch(k); break;
+    case 'tapeopen': { const vals = {}; tapeFields().forEach(([f]) => { const sr = tapeSeries(f); if (sr.length) vals[f] = toIn(sr[sr.length-1].v); }); S.sheet = {type: 'tape', date: todayKey(), vals, orig: {...vals}}; render(); break; }
+    case 'tapesave': { const sh = S.sheet; const dk = sh.date && sh.date <= todayKey() ? sh.date : todayKey(); const dd = day(dk); dd.ci = dd.ci || {}; let n2 = 0;
+      tapeFields().forEach(([f]) => { const v = num(sh.vals[f]); if (v && v !== sh.orig[f]) { dd.ci[f] = Math.round(v * IN * 10) / 10; n2++; } });
+      S.sheet = null; if (n2) { touch(dk); toast(`${n2} measurement${n2 > 1 ? 's' : ''} saved for ${shortDate(dk)}`); } else { render(); toast('Nothing changed'); } break; }
     case 'openmeal': S.openMeal = S.openMeal === id ? null : id; render(); break;
     case 'itemmeal': { const it = d.items.find(x => x.id === el.dataset.item); if (it) { it.m = id; touch(k); } break; }
     case 'delitem': d.items = d.items.filter(x => x.id !== id); S.sheet = null; touch(k); toast('Removed'); break;
@@ -1123,6 +1103,8 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset?.tape && S.sheet?.type === 'tape') { S.sheet.vals[el.dataset.tape] = el.value; return; }
+  if (el.dataset?.tapedate && S.sheet?.type === 'tape') { S.sheet.date = el.value; return; }
   if (el.dataset?.nap) { S.napDraft = S.napDraft || {s: hhmm(Date.now() - 3600e3), e: hhmm(Date.now())}; S.napDraft[el.dataset.nap] = el.value; return; }
   if (el.dataset?.mc && S.mc) { S.mc[el.dataset.mc] = el.value; const sl = (atClock(S.date, S.mc.wake, false) - bedMs(S.date, S.mc.bed)) / 3600e3; const o = document.getElementById('mcsl'); if (o) o.textContent = sl > 0 && sl < 16 ? `${sl.toFixed(1)} h of sleep` : 'Check the times'; return; }
   const f = el.dataset?.pf; if (!f || !S.pf) return;
