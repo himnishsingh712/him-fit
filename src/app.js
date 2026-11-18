@@ -39,6 +39,16 @@ const ICON = {
 };
 const ic = (n, s=22, w=2) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 
+// ================= meals =================
+const MEALS = [
+  {id:'breakfast', n:'Breakfast'}, {id:'msnack', n:'Morning snack'}, {id:'lunch', n:'Lunch'},
+  {id:'esnack', n:'Evening snack'}, {id:'dinner', n:'Dinner'}, {id:'late', n:'Late night'},
+];
+const MEALN = Object.fromEntries(MEALS.map(m => [m.id, m.n]));
+function mealByHour(h) { return h >= 5 && h < 11 ? 'breakfast' : h < 12 ? 'msnack' : h < 15 ? 'lunch' : h < 19 ? 'esnack' : h < 23 ? 'dinner' : 'late'; }
+const mealOf = it => it.m || (it.t ? mealByHour(new Date(it.t).getHours()) : 'breakfast');
+const STD_MEAL = {omelette:'breakfast', toast:'breakfast', cosmix:'breakfast', sattu:'breakfast', dahi:'esnack', banana:'esnack', taco:'dinner'};
+
 // ================= nutrition engine =================
 const unitCache = {};
 function vecAdd(t, v, mult) { for (const k in v) t[k] = (t[k] || 0) + v[k] * mult; return t; }
@@ -102,12 +112,12 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.1.0';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
 const S = {
-  days: {}, config: null, view: 'today', date: todayKey(), range: 7, open: null, cart: {}, dosaMode: null,
+  days: {}, config: null, view: 'today', date: todayKey(), range: 7, open: null, cart: {}, dosaMode: null, meal: null,
   sheet: null, sync: 'loading', toast: null, user: null, authMode: (() => { try { return localStorage.getItem('hf:hasAccount') ? 'signin' : 'signup'; } catch (e) { return 'signin'; } })(), authMsg: '', authErr: '', busy: false, recovery: false,
 };
 const CFG = () => Object.assign({}, DEFAULT_CONFIG, S.config || {});
@@ -275,8 +285,9 @@ function viewToday() {
   const items = (d.items || []).slice().sort((a, b) => (a.t||0) - (b.t||0)); const drinks = d.ci?.drinks || [];
   h += `<div class="card"><div class="row"><h2>Logged</h2><a href="#log" class="small" style="font-weight:600">+ Add food</a></div>`;
   if (!items.length && !drinks.length) h += `<div class="muted small">Nothing logged yet. Tap + to add food.</div>`;
-  else h += `<div class="list">${items.map(it => { const v = itemVec(it); return `<div class="li"><div class="main"><div class="t">${esc(itemLabel(it))}</div><div class="s">${it.t ? new Date(it.t).toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'}) : ''}</div></div><div class="num"><b>${fmt(v.kcal,'kcal')}</b><span class="muted">${fmt(v.p,'g')} g</span></div><button class="iconbtn" data-act="edititem" data-id="${it.id}" aria-label="Edit ${esc(itemLabel(it))}">${ic('right',18)}</button></div>`; }).join('')}
-    ${drinks.map(dr => { const v = drinkVec(dr); return `<div class="li"><div class="main"><div class="t">${esc(drinkLabel(dr))}</div><div class="s">${(stdDrinks({ci:{drinks:[dr]}})).toFixed(1)} standard drinks</div></div><div class="num"><b>${fmt(v.kcal,'kcal')}</b><span class="muted">drink</span></div><a class="iconbtn" href="#checkin" aria-label="Edit drinks in check-in">${ic('right',18)}</a></div>`; }).join('')}</div>`;
+  else h += `${MEALS.map(m => { const its = items.filter(it => mealOf(it) === m.id); if (!its.length) return ''; const mt = {}; its.forEach(it => vecAdd(mt, itemVec(it), 1));
+      return `<div style="margin-top:6px"><div class="row" style="padding:6px 0;border-bottom:1px solid var(--border)"><a href="#log" data-act="logmeal" data-id="${m.id}" style="font-family:var(--head);font-weight:700;font-size:15px;color:var(--acc);text-decoration:none">${m.n} <span style="font-weight:500">+</span></a><span class="small muted">${fmt(mt.kcal,'kcal')} kcal · ${fmt(mt.p,'g')} g</span></div><div class="list">${its.map(it => { const v = itemVec(it); return `<div class="li"><div class="main"><div class="t">${esc(itemLabel(it))}</div></div><div class="num"><b>${fmt(v.kcal,'kcal')}</b><span class="muted">${fmt(v.p,'g')} g</span></div><button class="iconbtn" data-act="edititem" data-id="${it.id}" aria-label="Edit ${esc(itemLabel(it))}">${ic('right',18)}</button></div>`; }).join('')}</div></div>`; }).join('')}
+    ${drinks.length ? `<div style="margin-top:6px"><div class="row" style="padding:6px 0;border-bottom:1px solid var(--border)"><a href="#checkin" style="font-family:var(--head);font-weight:700;font-size:15px;color:var(--acc);text-decoration:none">Drinks</a><span class="small muted">${stdDrinks(d).toFixed(1)} standard drinks</span></div>` : ''}<div class="list">${drinks.map(dr => { const v = drinkVec(dr); return `<div class="li"><div class="main"><div class="t">${esc(drinkLabel(dr))}</div><div class="s">${(stdDrinks({ci:{drinks:[dr]}})).toFixed(1)} standard drinks</div></div><div class="num"><b>${fmt(v.kcal,'kcal')}</b><span class="muted">drink</span></div><a class="iconbtn" href="#checkin" aria-label="Edit drinks in check-in">${ic('right',18)}</a></div>`; }).join('')}</div>${drinks.length ? '</div>' : ''}`;
   h += `</div>`;
   const wt = CFG().waterTargetMl, w = d.water || 0;
   h += `<div class="card"><div class="row"><h2>Water</h2><span class="big">${(w/1000).toFixed(w % 1000 ? 2 : 1).replace(/0$/, '')} <small>/ ${wt/1000} L</small></span></div><div class="bar"><div style="width:${Math.min(100, w/wt*100)}%;background:var(--water)"></div></div>
@@ -292,6 +303,8 @@ function viewLog() {
   let h = header('Log food');
   const cart = S.cart; const cartKeys = Object.keys(cart).filter(id => cart[id].q > 0);
   h += `<div class="grid"><button class="card span2" data-act="stdday" style="background:var(--acc);color:#1C1410;border:none;text-align:left;cursor:pointer"><b style="font-size:16px">Apply standard day</b><span style="font-size:13px">Adds omelette (3 eggs), 4 ghee-toast slices, Cosmix, sattu, curd, 2 bananas, 5 tacos. Edit or remove anything after.</span></button>`;
+  const curMeal = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast');
+  h += `<div class="card span2"><h2>Adding to</h2><div class="btns c3">${MEALS.map(m => `<button class="btn ${m.id === curMeal ? 'on' : ''}" data-act="meal" data-id="${m.id}" style="padding:0 6px;font-size:13px">${m.n}</button>`).join('')}</div></div>`;
   h += `<div class="card span2"><h2>Your foods</h2><div class="list">`;
   FOODS.forEach(f => {
     const c = cart[f.id] || {q: 0}; const u = foodUnit(f.id, c.o || {});
@@ -306,7 +319,7 @@ function viewLog() {
   h += `</div><div class="muted small">New foods get added to this list from their pack labels — ask Claude in chat.</div></div></div>`;
   const tot = {}; cartKeys.forEach(id => vecAdd(tot, foodUnit(id, cart[id].o || {}), cart[id].q));
   const n = sum(cartKeys.map(id => cart[id].q));
-  if (n) h += `<div class="cta"><button class="btn primary" data-act="addcart">Add ${n} item${n > 1 ? 's' : ''} · ${fmt(tot.kcal,'kcal')} kcal · ${fmt(tot.p,'g')} g protein</button></div>`;
+  if (n) h += `<div class="cta"><button class="btn primary" data-act="addcart">Add ${n} to ${MEALN[curMeal]} · ${fmt(tot.kcal,'kcal')} kcal · ${fmt(tot.p,'g')} g</button></div>`;
   return h;
 }
 function viewCheckin() {
@@ -425,6 +438,7 @@ function sheetHTML() {
     const f = FMAP[it.f]; const v = itemVec(it);
     return `<div class="sheetbg" data-act="closesheet"><div class="sheet" role="dialog" aria-label="Edit item" data-stop="1"><div class="row"><h3>${esc(f.name)}</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>
       <div class="row"><span>Quantity</span>${stepper('itemq', it.id, it.q)}</div>${f.param ? `<div class="row"><span>${f.param.label}</span>${stepper('itemp', it.id, it.o?.[f.param.key] ?? f.param.def)}</div>` : ''}
+      <div class="btns c3">${MEALS.map(m => `<button class="btn ${m.id === mealOf(it) ? 'on' : ''}" data-act="itemmeal" data-id="${m.id}" data-item="${it.id}" style="padding:0 6px;font-size:13px">${m.n}</button>`).join('')}</div>
       <div class="muted small">${fmt(v.kcal,'kcal')} kcal · ${fmt(v.p,'g')} g protein · ${fmt(v.f,'g')} g fat</div><button class="btn danger" data-act="delitem" data-id="${it.id}">Remove</button></div></div>`;
   }
   if (sh.type === 'drink') {
@@ -531,7 +545,7 @@ function render() {
   document.getElementById('app').innerHTML = `<main class="wrap">${(VIEWS[S.view] || viewToday)()}</main>${nav()}${sheetHTML()}${S.toast ? `<div class="toast" role="status">${esc(S.toast)}</div>` : ''}`;
   window.scrollTo(0, sy);
 }
-function route() { if (!S.user) { render(); return; } const v = location.hash.replace('#', ''); S.view = VIEWS[v] ? v : 'today'; S.open = null; render(); window.scrollTo(0, 0); }
+function route() { if (!S.user) { render(); return; } if (location.hash !== '#log') S.meal = null; const v = location.hash.replace('#', ''); S.view = VIEWS[v] ? v : 'today'; S.open = null; render(); window.scrollTo(0, 0); }
 let toastT; function toast(m) { S.toast = m; clearTimeout(toastT); toastT = setTimeout(() => { S.toast = null; render(); }, 1800); render(); }
 
 // ================= events =================
@@ -548,11 +562,14 @@ document.addEventListener('click', e => {
     case 'cart': { const c = S.cart[id] || (S.cart[id] = {q: 0, o: {}}); c.q = Math.max(0, c.q + n); if (FMAP[id].param && !c.o[FMAP[id].param.key]) c.o[FMAP[id].param.key] = FMAP[id].param.def; render(); break; }
     case 'param': { const f = FMAP[id]; const c = S.cart[id]; const pk = f.param.key; c.o[pk] = Math.min(f.param.max, Math.max(f.param.min, (c.o[pk] ?? f.param.def) + n)); render(); break; }
     case 'dosa': { const m = el.dataset.m; const c = S.cart.dosa || (S.cart.dosa = {q: 0, o: {}}); if (m === 'n') { S.dosaMode = 'n'; c.q = Math.max(c.q, 1); } else { S.dosaMode = null; c.q = c.q === +m ? 0 : +m; } render(); break; }
-    case 'addcart': { const now = Date.now(); Object.entries(S.cart).forEach(([fid, c]) => { if (c.q > 0) d.items.push({id: uid(), f: fid, q: c.q, o: FMAP[fid].param ? {[FMAP[fid].param.key]: c.o[FMAP[fid].param.key] ?? FMAP[fid].param.def} : {}, t: now}); }); S.cart = {}; S.dosaMode = null; touch(k); toast('Added'); location.hash = '#today'; break; }
-    case 'stdday': { const now = Date.now(); STANDARD_DAY.forEach(s => d.items.push({id: uid(), f: s.f, q: s.q, o: s.o || {}, t: now})); touch(k); toast('Standard day added'); location.hash = '#today'; break; }
+    case 'addcart': { const now = Date.now(); const m = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast'); Object.entries(S.cart).forEach(([fid, c]) => { if (c.q > 0) d.items.push({id: uid(), f: fid, q: c.q, o: FMAP[fid].param ? {[FMAP[fid].param.key]: c.o[FMAP[fid].param.key] ?? FMAP[fid].param.def} : {}, t: now, m}); }); S.cart = {}; S.dosaMode = null; S.meal = null; touch(k); toast('Added'); location.hash = '#today'; break; }
+    case 'stdday': { const now = Date.now(); STANDARD_DAY.forEach(s => d.items.push({id: uid(), f: s.f, q: s.q, o: s.o || {}, t: now, m: STD_MEAL[s.f] || 'breakfast'})); touch(k); toast('Standard day added'); location.hash = '#today'; break; }
     case 'edititem': S.sheet = {type: 'item', id}; render(); break;
     case 'itemq': { const it = d.items.find(x => x.id === id); if (it) { it.q = Math.max(1, it.q + n); touch(k); } break; }
     case 'itemp': { const it = d.items.find(x => x.id === id); const f = it && FMAP[it.f]; if (f?.param) { it.o = it.o || {}; it.o[f.param.key] = Math.min(f.param.max, Math.max(f.param.min, (it.o[f.param.key] ?? f.param.def) + n)); touch(k); } break; }
+    case 'meal': S.meal = id; render(); break;
+    case 'logmeal': S.meal = id; break;
+    case 'itemmeal': { const it = d.items.find(x => x.id === el.dataset.item); if (it) { it.m = id; touch(k); } break; }
     case 'delitem': d.items = d.items.filter(x => x.id !== id); S.sheet = null; touch(k); toast('Removed'); break;
     case 'closesheet': S.sheet = null; render(); break;
     case 'cistep': { d.ci = d.ci || {}; const f = id; const step = +(el.dataset.step || 1); const cur = d.ci[f]; d.ci[f] = cur == null ? (f === 'sl' ? 7 : Math.max(0, n)) : Math.min(f === 'sl' ? 16 : 999, Math.max(0, Math.round((cur + n * step) * 10) / 10)); touch(k); break; }
