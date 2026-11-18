@@ -11,8 +11,11 @@
 //   6 Caffeine: blood level (absorbs in ~45 min, halves every 5 h), soft crash after big doses
 //   7 Alcohol: tonight's sedation, last night's hangover
 //   8 Cannabis: short lift, longer couch phase, heavy-day fog, next-morning fog; scaled by tolerance
+//   9 Day tags: sick, stressed, travel, exam, party (and yesterday's party)
 
 const H = 3600e3, MIN = 60e3;
+// Frozen until 16 Dec 2026 so predictions can be compared fairly with your ratings. Change one layer at a time after that.
+export const MODEL_VERSION = 'v1';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // piecewise-linear interpolation over [[x, y], ...] (sorted by x); flat beyond the ends
 export function interp(pts, x) {
@@ -131,6 +134,14 @@ export function energyAt(inp, t) {
   const hitsSoFar = (inp.hits || []).filter(h => h <= t).length; if (hitsSoFar > 6) add('cannabis', 'fog', `${hitsSoFar} hits today (fog)`, -Math.min(10, 0.8 * (hitsSoFar - 6)));
   if (inp.lastNight?.lateHits) add('cannabis', 'morningfog', 'Late-night hits', -Math.min(10, 1.2 * inp.lastNight.lateHits) * clamp(1 - a / 6, 0, 1));
   if ((inp.lastNight?.totalHits || 0) > 10 && a < 4) add('cannabis', 'heavyday', 'Heavy smoking yesterday', -3);
+  // ---- 9 day tags
+  const tg = inp.tags || [];
+  if (tg.includes('sick')) add('tags', 'sick', 'Sick today', -12);
+  if (tg.includes('stressed')) add('tags', 'stressed', 'Stressed', -5);
+  if (tg.includes('travel')) add('tags', 'travel', 'Travel day', -5);
+  if (tg.includes('exam')) add('tags', 'exam', a < 8 ? 'Exam adrenaline' : 'After the exam', a < 8 ? 4 : -4);
+  if (tg.includes('party') && a >= 10) add('tags', 'party', 'Party night', 4);
+  if ((inp.yTags || []).includes('party')) add('tags', 'yparty', "Last night's party", -6 * clamp(1 - a / 6, 0, 1));
   const raw = 75 + R.reduce((s, x) => s + x.v, 0);
   return {t, score: clamp(Math.round(raw), 5, 98), parts: R};
 }

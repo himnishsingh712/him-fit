@@ -65,3 +65,16 @@ All maths lives in `src/profile.js` as plain functions, separate from the screen
 `src/energy.js`: plain functions, fixed rules, no AI. Base 75 plus eight layers, clamped 5–98, computed every 10 minutes from wake to bedtime. Green 70+, yellow 45–69, red under 45.
 Inputs: morning check-in (bed/wake times, sleep quality, mood, body feel), food with times, drinks with times (caffeine model: absorbs in ~45–60 min, half-life 5 h), water taps with times, bong-hit taps with times (tolerance from the 7-day average), last night's drinks and late hits.
 Each morning you rate yesterday (1–5). The app stores its own prediction for yesterday next to it (`ePred` vs `eRep`), and Trends shows how often they match. The numbers get tuned monthly from that comparison.
+
+## v1.5 additions
+- **Weight at any time of day** (`src/profile.js`): corrected to a morning-equivalent by hours since waking: 0–2 h none, 2–5 h −0.4%, 5–9 h −0.8%, 9–13 h −1.2%, 13 h+ −1.4%. Raw and corrected both stored; trends, maintenance and targets use the corrected one.
+- **Bong-hit timing** (`src/hits.js`): taps less than 3 minutes apart form a chain. 1–4 = one session at that moment. 5+ = catch-up: spread back from now at 6 an hour, never before your last logged hit or wake time, never denser than 10 an hour. Override: last hour / last 2–3 h / since I woke.
+- **Sleep** comes only from bed and wake times (morning card or Check-in). Hours are never typed.
+- **Day tags** (exam, sick, party, travel, stressed) feed the energy score; sick and travel days are left out of maintenance and insights.
+- **Energy model v1 is frozen until 16 Dec 2026**; every stored prediction carries its version (`eVer`).
+- **Target change log**: when the weekly target moves, Me shows one line with the reason and it is saved to the change history.
+- **Weekly review** (Today on Mondays, Trends always): averages, weight change, energy, sleep, substances, low-all-week nutrients, and one rule-based change for the week.
+- **Export** (tap the sync status): days, food and drinks as CSV, plus a full JSON backup.
+
+## Tests
+`npm test` runs `tests/unit.test.mjs` (maths) and `tests/app.test.cjs` (the whole app in a headless browser with a fake Supabase).

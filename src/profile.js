@@ -141,3 +141,9 @@ export function etaWeeks(p, kgNow, rate) {
 export const bmiBand = b => b < 18.5 ? 'underweight' : b < 25 ? 'normal' : b < 30 ? 'overweight' : 'obese';
 export const ffmiBand = f => f < 18 ? 'below average' : f < 20 ? 'average' : f < 22 ? 'trained' : f < 24 ? 'very muscular' : 'elite';
 export const bfBand = (bf, sex) => sex === 'f' ? (bf < 21 ? 'athletic' : bf < 25 ? 'fit' : bf < 32 ? 'average' : 'high') : (bf < 14 ? 'athletic' : bf < 18 ? 'fit' : bf < 25 ? 'average' : 'high');
+
+// Weight rises through the day with food and water. Weigh-ins are corrected to a
+// morning-equivalent using hours since waking (about 1.4% by late night).
+export const WEIGHT_CORR = [[0, 0], [2, 0], [2.01, 0.004], [5, 0.004], [5.01, 0.008], [9, 0.008], [9.01, 0.012], [13, 0.012], [13.01, 0.014]];
+export function weightCorrPct(hoursAwake) { if (hoursAwake == null || hoursAwake < 2) return 0; if (hoursAwake < 5) return 0.004; if (hoursAwake < 9) return 0.008; if (hoursAwake < 13) return 0.012; return 0.014; }
+export function correctedWeight(raw, hoursAwake) { return raw * (1 - weightCorrPct(hoursAwake)); }
