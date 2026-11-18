@@ -58,6 +58,7 @@ const go = async h => { w.location.hash = h; await wait(40); };
   ok('nap added and counted in sleep', doc.body.textContent.includes('4 h today') && doc.body.textContent.includes('with naps'), txt('.card .muted.small'));
   await go('#energy');
   ok('energy screen with breakdown', $('.ecard') && doc.body.textContent.includes('Day tags') && doc.body.textContent.includes('model v1'));
+  await go('#log'); click('[data-act=logdrink]'); await wait(20); click('[data-act=cpick][data-id=latte]'); await wait(10); click('[data-act=savedrink]'); await wait(30);
   await go('#nutrients'); ok('nutrients show caffeine', $$('.nrow').some(r => r.textContent.includes('Caffeine')));
   await go('#trends'); ok('trends render with weekday/weekend card', doc.body.textContent.includes('Weekdays vs weekends'));
   await go('#me'); ok('Me shows daily target', doc.body.textContent.includes('Daily target'));
