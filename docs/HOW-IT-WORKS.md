@@ -51,3 +51,12 @@ and writes one fixed sentence. Same data → same result, every time.
 `.env` is committed because both values are public. Anything secret (a service-role key, an API key with write
 powers) must **never** go in this repo or in the app. It would belong in Vercel's environment variables or a
 Supabase Edge Function secret.
+
+## Profile and targets (v1.3)
+All maths lives in `src/profile.js` as plain functions, separate from the screens.
+- **BMR:** Mifflin–St Jeor: 10 × kg + 6.25 × cm − 5 × age + 5 (men) / −161 (women).
+- **Maintenance (formula):** BMR × daily-movement factor (1.25 sitting, 1.4 some, 1.55 a lot) + training (3.8 kcal × kg × hours per session × sessions ÷ 7).
+- **Maintenance (measured):** average logged intake over the last 28 days − weight-trend slope × 7,700 kcal/kg. Needs 14 complete days and 8 weigh-ins over 10+ days. Blended in from 50% (14 days) to 100% (28 days). Ignored if it is more than 25% away from the formula (usually a logging gap).
+- **Target:** maintenance + pace × 7,700 ÷ 7 (deficit capped at 25%). Protein g/kg by goal, fat 0.8 g/kg minimum and 30% maximum, carbs are the rest, fibre 14 g per 1,000 kcal, water 35 ml/kg + training.
+- **Frozen weekly:** targets for a Monday–Sunday week use only data from before that Monday.
+- **Body fat:** US Navy tape method (waist + neck, plus hips for women). Shown only if measured in the last 60 days. FFMI = lean kg ÷ m², adjusted to 1.8 m.
