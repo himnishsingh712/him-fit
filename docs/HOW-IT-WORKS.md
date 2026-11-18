@@ -78,3 +78,6 @@ Each morning you rate yesterday (1–5). The app stores its own prediction for y
 
 ## Tests
 `npm test` runs `tests/unit.test.mjs` (maths) and `tests/app.test.cjs` (the whole app in a headless browser with a fake Supabase).
+
+## Naps (v1.5.1)
+Check-in → "Naps & daytime sleep": add start and end times (any number per day). They add to the day's sleep total (Check-in, Today, weekly review, export `nap_h`) and count 70% toward sleep debt. In the energy score: no score while asleep (the curve breaks); grogginess after waking (6–15 points for 10–40 min, by nap length); a lift up to +10 that fades over ~5 h; part of the 'hours awake' clock resets (a 2 h nap resets 80%); time asleep is left out of 'food or water expected by now', and fasting time counts 30% while asleep.

@@ -133,7 +133,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -271,8 +271,8 @@ function energyInput(k) {
   const yEve = atClock(addDays(k, -1), '18:00', false), yLate = atClock(addDays(k, -1), '21:00', false);
   const lastNight = {std: sum((y.ci?.drinks || []).filter(dr => dr.t >= yEve).map(dr => (drinkVec(dr).alc || 0) / 10)), lateHits: (y.ci?.hitsT || []).filter(t => t >= yLate).length, totalHits: y.ci?.hits || 0};
   return {wake: st.wake, bed: st.bed, real: st.real, usualWakeMin: minOf(p.wake || '09:00'), usualBedMin: minOf(p.bed || '01:00'),
-    priorSleep: [1, 2, 3].map(i => S.days[addDays(k, -i)]?.ci?.sl ?? null), report: ci.mc && !ci.mc.skipped && ci.mc.sq != null && ci.mc.mood != null && ci.mc.feel != null ? {sq: ci.mc.sq, mood: ci.mc.mood, feel: ci.mc.feel} : null,
-    intakes, caffeine, water, hits: ci.hitsT || [], tags: ci.tags || [], yTags: y.ci?.tags || [], hitsAvg7: h7.length ? mean(h7) : 0, lastNight, targets: {kcal: T('kcal'), p: T('p'), water: waterTarget()}};
+    priorSleep: [1, 2, 3].map(i => { const c = S.days[addDays(k, -i)]?.ci; return c?.sl != null ? c.sl + 0.7 * napHours(c) : null; }), report: ci.mc && !ci.mc.skipped && ci.mc.sq != null && ci.mc.mood != null && ci.mc.feel != null ? {sq: ci.mc.sq, mood: ci.mc.mood, feel: ci.mc.feel} : null,
+    naps: (ci.naps || []).map(n => ({s: n.s, e: n.e})), intakes, caffeine, water, hits: ci.hitsT || [], tags: ci.tags || [], yTags: y.ci?.tags || [], hitsAvg7: h7.length ? mean(h7) : 0, lastNight, targets: {kcal: T('kcal'), p: T('p'), water: waterTarget()}};
 }
 function energyFor(k, now = Date.now()) { const inp = energyInput(k); const end = Math.max(endOfDayMs(k), Math.min(now, endOfDayMs(k) + 3 * 3600e3)); return {inp, ...energyDay(inp, Math.min(now, end), end), end}; }
 function addHit(k, n) {
@@ -284,6 +284,16 @@ function addHit(k, n) {
 }
 function respreadHits(k, mode) { const ci = day(k).ci; if (!ci?.hitsTap?.length) return; const r = placeHits(ci.hitsTap, sleepTimes(k).wake, mode); ci.hitsT = r.times; ci.hitsChain = r.chain; touch(k); }
 function hitsChainLine(k) { const ch = S.days[k]?.ci?.hitsChain; if (!ch) return ''; return `<div class="flag info"><div>${ch.n} hits spread over ${tlabel(ch.start)}–${tlabel(ch.end)}. <span class="small">Change: <a href="#" data-act="hitmode" data-id="1h">last hour</a> · <a href="#" data-act="hitmode" data-id="3h">last 2–3 h</a> · <a href="#" data-act="hitmode" data-id="wake">since I woke</a></span></div></div>`; }
+const napHours = ci => sum((ci?.naps || []).map(n => Math.max(0, n.e - n.s))) / 3600e3;
+const fmtH = h => { const m = Math.round(h * 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ' ' + (m % 60) + ' min' : ''}`; };
+function napCard(k) {
+  const ci = S.days[k]?.ci || {}; const naps = (ci.naps || []).slice().sort((a, b) => a.s - b.s);
+  const nowT = hhmm(Date.now()); const def = S.napDraft || {s: hhmm(Date.now() - 3600e3), e: nowT};
+  return `<div class="card"><div class="row"><div><h2>Naps &amp; daytime sleep</h2><div class="muted small">${naps.length ? `${fmtH(napHours(ci))} today · counts toward your sleep and energy` : 'Any sleep outside the night. Adds to the day and your energy score.'}</div></div></div>
+    ${naps.length ? `<div class="list">${naps.map(n => `<div class="li"><div class="main"><div class="t">${tlabel(n.s)} – ${tlabel(n.e)}</div><div class="s">${fmtH((n.e - n.s) / 3600e3)}</div></div><button class="iconbtn" data-act="delnap" data-id="${n.id}" aria-label="Remove nap">${ic('x',18)}</button></div>`).join('')}</div>` : ''}
+    <div class="g2"><label class="fl">Fell asleep<input class="field" type="time" value="${def.s}" data-nap="s"></label><label class="fl">Woke up<input class="field" type="time" value="${def.e}" data-nap="e"></label></div>
+    <button class="btn" data-act="addnap">+ Add nap</button></div>`;
+}
 const median = a => { const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length/2); return s.length % 2 ? s[m] : (s[m-1]+s[m])/2; };
 const INSIGHTS = [
   {x:'Drinks (std)', y:'sleep', fx: d => Array.isArray(d?.ci?.drinks) ? stdDrinks(d) : undefined, fy: (d, n) => n?.ci?.sl, lag:1, yu:'h', verb:'you slept', after:'the next night', yd:1, bin:true},
@@ -379,7 +389,7 @@ function viewToday() {
   h += `<div class="card"><div class="row"><h2>Supplements</h2><span style="display:flex;gap:12px;align-items:center">${due.length && due.some(x => !d.supp?.[x.id]) ? '<button class="pill" data-act="suppall">Took all</button>' : ''}<a href="#supplements" class="small" style="font-weight:600">Schedule</a></span></div>${due.length ? due.map(s => `<label class="chk"><input type="checkbox" data-act="supp" data-id="${s.id}" ${d.supp?.[s.id] ? 'checked' : ''}><span>${esc(s.name)} <span class="muted" style="font-weight:400">· ${esc(s.dose)}</span></span></label>`).join('') : '<div class="muted small">Nothing scheduled.</div>'}</div>`;
   const ci = d.ci || {};
   const tile = (l, v) => `<div class="tile c"><div class="l">${l}</div><div class="v">${v}</div></div>`;
-  h += `<a class="card" href="#checkin" style="text-decoration:none;color:inherit"><div class="row"><h2>Check-in</h2><span class="small" style="font-weight:600;color:var(--acc)">Log sleep, drinks, hits →</span></div><div class="tiles">${tile('Weight', ci.w ? ci.w + ' kg' : '—')}${tile('Sleep', ci.sl != null ? ci.sl + ' h' : '—')}${tile('Trained', ci.tr == null ? '—' : ci.tr ? 'Yes' : 'No')}${tile('Bong hits', ci.hits ?? '—')}${tile('Cigarettes', ci.cigs ?? '—')}${tile('Drinks', ci.drinks?.length ? stdDrinks(d).toFixed(1) + ' std' : (ci.drinks ? '0' : '—'))}</div><div class="muted small">Weight, sleep, training, bong hits, cigarettes and drinks — all optional, kept separate from food.</div></a>`;
+  h += `<a class="card" href="#checkin" style="text-decoration:none;color:inherit"><div class="row"><h2>Check-in</h2><span class="small" style="font-weight:600;color:var(--acc)">Log sleep, drinks, hits →</span></div><div class="tiles">${tile('Weight', ci.w ? ci.w + ' kg' : '—')}${tile('Sleep', ci.sl != null || napHours(ci) ? ((ci.sl || 0) + napHours(ci)).toFixed(1).replace(/\.0$/, '') + ' h' + (napHours(ci) ? ' · nap' : '') : '—')}${tile('Trained', ci.tr == null ? '—' : ci.tr ? 'Yes' : 'No')}${tile('Bong hits', ci.hits ?? '—')}${tile('Cigarettes', ci.cigs ?? '—')}${tile('Drinks', ci.drinks?.length ? stdDrinks(d).toFixed(1) + ' std' : (ci.drinks ? '0' : '—'))}</div><div class="muted small">Weight, sleep, training, bong hits, cigarettes and drinks — all optional, kept separate from food.</div></a>`;
   return h + '</div>';
 }
 function viewLog() {
@@ -416,7 +426,8 @@ function viewCheckin() {
   h += `<div class="grid">`;
   h += `<div class="card"><div class="row"><label for="w"><h2>Weight</h2><div class="muted small">${ci.w && ci.wt ? (() => { const ha = weightHoursAwake(k); const pc = weightCorrPct(ha); return pc ? `Weighed ${ha.toFixed(0)} h after waking: counts as <b>${weightCorr(k).toFixed(1)} kg</b> (−${(pc * 100).toFixed(1)}%)` : 'Weighed soon after waking: counts as is'; })() : 'Any time; corrected to a morning number by hours since waking'}</div></label><span style="display:flex;align-items:center;gap:6px"><input id="w" class="num" type="number" inputmode="decimal" step="0.1" min="30" max="200" value="${ci.w ?? ''}" placeholder="—" data-act="ci" data-f="w"><span class="muted">kg</span></span></div>${lastWeightNote(k)}</div>`;
   h += `<div class="card"><div class="row"><div><h2>Tape measure</h2><div class="muted small">Optional, about once a month. Morning, relaxed. Gives body-fat % on the Me tab.</div></div></div><div class="g2"><label class="fl">Waist at navel (cm)<input class="num" style="width:100%" type="number" inputmode="decimal" step="0.5" value="${ci.waist ?? ''}" placeholder="—" data-act="ci" data-f="waist"></label><label class="fl">Neck (cm)<input class="num" style="width:100%" type="number" inputmode="decimal" step="0.5" value="${ci.neck ?? ''}" placeholder="—" data-act="ci" data-f="neck"></label></div>${PROF()?.sex === 'f' ? `<label class="fl">Hips (cm)<input class="num" style="width:100%" type="number" inputmode="decimal" step="0.5" value="${ci.hip ?? ''}" placeholder="—" data-act="ci" data-f="hip"></label>` : ''}</div>`;
-  { const mc = ci.mc && !ci.mc.skipped ? ci.mc : null; const p = PROF() || {}; h += `<div class="card"><div class="row"><div><h2>Sleep last night</h2><div class="muted small">${ci.sl != null ? `<b>${ci.sl} h</b> · worked out from your times` : 'Set the times; hours are worked out for you'}</div></div></div><div class="g2"><label class="fl">Went to sleep<input class="field" type="time" value="${mc?.bed || p.bed || '01:00'}" data-act="sleeptime" data-f="bed"></label><label class="fl">Woke up<input class="field" type="time" value="${mc?.wake || p.wake || '09:00'}" data-act="sleeptime" data-f="wake"></label></div></div>`; }
+  { const mc = ci.mc && !ci.mc.skipped ? ci.mc : null; const p = PROF() || {}; h += `<div class="card"><div class="row"><div><h2>Sleep last night</h2><div class="muted small">${ci.sl != null ? `<b>${ci.sl} h</b> · worked out from your times${napHours(ci) ? ` · <b>${(ci.sl + napHours(ci)).toFixed(1)} h</b> with naps` : ''}` : 'Set the times; hours are worked out for you'}</div></div></div><div class="g2"><label class="fl">Went to sleep<input class="field" type="time" value="${mc?.bed || p.bed || '01:00'}" data-act="sleeptime" data-f="bed"></label><label class="fl">Woke up<input class="field" type="time" value="${mc?.wake || p.wake || '09:00'}" data-act="sleeptime" data-f="wake"></label></div></div>`; }
+  h += napCard(k);
   h += `<div class="card"><h2>Day tags</h2>${tagRow(ci.tags || [], 'daytag')}<div class="muted small">Count in your energy score. Sick and travel days are left out of maintenance and insights.</div></div>`;
   h += `<div class="card"><h2>Trained today?</h2><div class="btns c2"><button class="btn ${ci.tr === true ? 'on' : ''}" data-act="trained" data-v="1">Yes</button><button class="btn ${ci.tr === false ? 'on' : ''}" data-act="trained" data-v="0">No</button></div>${ci.tr ? `<div class="row"><label for="burn" style="font-size:14px;font-weight:500">Rough calories burned</label><input id="burn" class="num" type="number" inputmode="numeric" min="0" max="3000" value="${ci.burn ?? ''}" placeholder="—" data-act="ci" data-f="burn"></div><div class="muted small">Recorded only. Your calorie target already allows for training.</div>` : ''}</div>`;
   h += `<div class="card"><div class="row"><div><h2>Bong hits</h2><div class="muted small">${hitsNote(k)}</div></div>${stepper('cistep', 'hits', ci.hits ?? '—')}</div>${hitsChainLine(k)}<div class="muted small">Tap + when you take them. 5+ taps in a row count as catching up: spread back at ~6 an hour (12 hits = last 2 h). Change it if they were spread out more.</div></div>`;
@@ -458,9 +469,9 @@ function exportData(kind) {
   const ks = allKeys().filter(k => hasData(S.days[k])); const stamp = todayKey();
   if (kind === 'json') return download(`himfit-backup-${stamp}.json`, JSON.stringify({exported: new Date().toISOString(), version: APP_VERSION, config: S.config, days: S.days}, null, 1), 'application/json');
   if (kind === 'days') {
-    const rows = [['date','kcal','protein_g','carbs_g','fat_g','fibre_g','sodium_mg','caffeine_mg','processed_pct','water_ml','weight_raw_kg','weight_corrected_kg','weighed_at','sleep_h','bed','wake','sleep_quality','mood','body_feel','energy_rated','energy_predicted','model','bong_hits','cigarettes','std_drinks','trained','kcal_burned','tags','log_complete','kcal_target','protein_target']];
+    const rows = [['date','kcal','protein_g','carbs_g','fat_g','fibre_g','sodium_mg','caffeine_mg','processed_pct','water_ml','weight_raw_kg','weight_corrected_kg','weighed_at','sleep_h','nap_h','bed','wake','sleep_quality','mood','body_feel','energy_rated','energy_predicted','model','bong_hits','cigarettes','std_drinks','trained','kcal_burned','tags','log_complete','kcal_target','protein_target']];
     ks.forEach(k => { const d = S.days[k], ci = d.ci || {}, c = dayCalc(d), t = c.tot, mc = ci.mc || {}; const pl = plan(k);
-      rows.push([k, Math.round(t.kcal || 0), Math.round(t.p || 0), Math.round(t.c || 0), Math.round(t.f || 0), Math.round(t.fib || 0), Math.round(t.na || 0), Math.round(t.caf || 0), c.processed == null ? '' : Math.round(c.processed), d.water || 0, ci.w ?? '', ci.w ? weightCorr(k).toFixed(2) : '', ci.wt ? new Date(ci.wt).toISOString() : '', ci.sl ?? '', mc.bed || '', mc.wake || '', mc.sq != null ? WORDS.sq[mc.sq] : '', mc.mood != null ? WORDS.mood[mc.mood] : '', mc.feel != null ? WORDS.feel[mc.feel] : '', ci.eRep ?? '', ci.ePred ?? '', ci.eVer || '', ci.hits ?? '', ci.cigs ?? '', ci.drinks ? stdDrinks(d).toFixed(1) : '', ci.tr == null ? '' : ci.tr ? 'yes' : 'no', ci.burn ?? '', (ci.tags || []).join(' '), ci.lc == null ? '' : ci.lc ? 'yes' : 'no', pl ? pl.targets.kcal : '', pl ? pl.targets.p : '']); });
+      rows.push([k, Math.round(t.kcal || 0), Math.round(t.p || 0), Math.round(t.c || 0), Math.round(t.f || 0), Math.round(t.fib || 0), Math.round(t.na || 0), Math.round(t.caf || 0), c.processed == null ? '' : Math.round(c.processed), d.water || 0, ci.w ?? '', ci.w ? weightCorr(k).toFixed(2) : '', ci.wt ? new Date(ci.wt).toISOString() : '', ci.sl ?? '', napHours(ci) ? napHours(ci).toFixed(2) : '', mc.bed || '', mc.wake || '', mc.sq != null ? WORDS.sq[mc.sq] : '', mc.mood != null ? WORDS.mood[mc.mood] : '', mc.feel != null ? WORDS.feel[mc.feel] : '', ci.eRep ?? '', ci.ePred ?? '', ci.eVer || '', ci.hits ?? '', ci.cigs ?? '', ci.drinks ? stdDrinks(d).toFixed(1) : '', ci.tr == null ? '' : ci.tr ? 'yes' : 'no', ci.burn ?? '', (ci.tags || []).join(' '), ci.lc == null ? '' : ci.lc ? 'yes' : 'no', pl ? pl.targets.kcal : '', pl ? pl.targets.p : '']); });
     return download(`himfit-days-${stamp}.csv`, toCSV(rows));
   }
   if (kind === 'food') {
@@ -599,8 +610,9 @@ function energyCurve(e, now) {
   const W = 340, H = 120, pts = e.pts; if (pts.length < 2) return '';
   const t0 = pts[0].t, t1 = pts[pts.length-1].t; const X = t => 6 + (t - t0) / (t1 - t0) * (W - 12), Y = v => 6 + (100 - v) / 100 * (H - 12);
   const past = pts.filter(p => p.t <= now), fut = pts.filter(p => p.t >= now - 6e5);
-  const path = ps => ps.map((p, i) => (i ? 'L' : 'M') + X(p.t).toFixed(1) + ' ' + Y(p.score).toFixed(1)).join(' ');
+  const path = ps => { let out = '', pen = false; ps.forEach(p => { if (p.asleep) { pen = false; return; } out += (pen ? 'L' : 'M') + X(p.t).toFixed(1) + ' ' + Y(p.score).toFixed(1); pen = true; }); return out; };
   let s = `<svg class="chart" viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="Energy through the day">`;
+  (e.inp.naps || []).forEach(n => { const a = Math.max(t0, n.s), b = Math.min(t1, n.e); if (b > a) s += `<rect x="${X(a).toFixed(1)}" y="0" width="${(X(b) - X(a)).toFixed(1)}" height="${H}" fill="var(--water)" opacity=".12"/><text x="${((X(a) + X(b)) / 2).toFixed(1)}" y="14" text-anchor="middle" font-size="10" fill="var(--water)" font-family="Inter,sans-serif">nap</text>`; });
   [[70,'var(--ok)'],[45,'var(--over)']].forEach(([v, c]) => s += `<line x1="0" x2="${W}" y1="${Y(v)}" y2="${Y(v)}" stroke="${c}" stroke-opacity=".35" stroke-dasharray="3 4"/>`);
   if (past.length > 1) s += `<path d="${path(past)}" fill="none" stroke="var(--acc)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
   if (fut.length > 1) s += `<path d="${path(fut)}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="4 4"/>`;
@@ -625,7 +637,7 @@ function energyCard(k) {
     </div>`;
   return h;
 }
-const LAYERS = [['tags','Day tags'],['sleep','Sleep'],['report','Your morning report'],['clock','Body clock'],['fuel','Food'],['water','Water'],['caffeine','Caffeine'],['alcohol','Alcohol'],['cannabis','Cannabis']];
+const LAYERS = [['tags','Day tags'],['sleep','Sleep'],['nap','Naps'],['report','Your morning report'],['clock','Body clock'],['fuel','Food'],['water','Water'],['caffeine','Caffeine'],['alcohol','Alcohol'],['cannabis','Cannabis']];
 function energySheet() { return `<div class="sheetbg" data-act="closesheet"><div class="sheet tall" role="dialog" aria-label="Energy breakdown" data-stop="1"><div class="row"><h3>Energy breakdown</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>${energyBreakdown()}</div></div>`; }
 function energyBreakdown() {
   const k = S.date, isToday = k === todayKey(); const e = energyFor(k, isToday ? Date.now() : endOfDayMs(k)); const c = e.cur;
@@ -643,6 +655,7 @@ function energyBreakdown() {
     <p><b>Caffeine:</b> a blood-level model: absorbs in ~45–60 min, halves every 5 h. The lift grows with the level but flattens (the third coffee adds less than the first). After a big dose, a small dip as it wears off.</p>
     <p><b>Alcohol:</b> 1–2 drinks give a short lift, then every standard drink sedates for ~4 h. Last night's drinks cost you in the morning and fade by evening.</p>
     <p><b>Cannabis:</b> each session (hits within 30 min) gives a lift peaking at 15 min and gone by 45, then a couch phase from 40 min to 3.5 h. Bigger sessions hit harder but with diminishing returns. Your 7-day average is your tolerance: the more you smoke daily, the smaller both effects. Past 6 hits a day adds fog; hits after 9 PM cost you the next morning.</p>
+    <p><b>Naps:</b> each nap gives grogginess right after waking (10 min for under 30 min, up to 40 min for over an hour), then a lift up to +10 that fades over ~5 h. A nap also resets part of your 'hours awake' clock (a 2 h nap resets 80%), so late-day tiredness starts later. Time asleep doesn't count toward 'food or water expected by now', and you get less hungry asleep. Naps count 70% toward sleep debt.</p>
     <p><b>Day tags:</b> sick −12 all day; stressed −5; travel −5; exam +4 for the first 8 h awake, then −4; party +4 in the evening and −6 the next morning, fading by midday.</p>
     <p><b>Not counted:</b> cigarettes (your call) and training (no time recorded).</p>
     <p><b>Model ${MODEL_VERSION}, frozen until 16 Dec 2026.</b> Until then none of these numbers change, so the app's predictions can be compared fairly with your morning ratings. After that, the worst-matching layer gets adjusted, one layer at a time.</p></div></details>`;
@@ -662,7 +675,7 @@ function energyCompareCard() {
 function todayStrip(k, tot) {
   const isToday = k === todayKey(); const e = energyFor(k, isToday ? Date.now() : endOfDayMs(k)); const b = band(e.cur.score);
   const kl = T('kcal') - (tot.kcal || 0), pl = T('p') - (tot.p || 0);
-  return `<a class="card span2 strip" href="#energy"><div class="sx" style="--bc:${BCOL[b.c]}"><div class="l">Energy${isToday ? '' : ' (end of day)'}</div><div class="v">${e.cur.score}</div><div class="s">${b.n}</div></div>
+  return `<a class="card span2 strip" href="#energy"><div class="sx" style="--bc:${BCOL[b.c]}"><div class="l">Energy${isToday ? '' : ' (end of day)'}</div><div class="v">${e.cur.asleep ? 'zz' : e.cur.score}</div><div class="s">${e.cur.asleep ? 'napping' : b.n}</div></div>
     <div class="sx"><div class="l">${kl >= 0 ? 'Calories left' : 'Calories over'}</div><div class="v" style="color:${kl >= 0 ? 'var(--text)' : 'var(--over)'}">${fmt(Math.abs(kl),'kcal')}</div><div class="s">of ${fmt(T('kcal'),'kcal')}</div></div>
     <div class="sx"><div class="l">${pl > 0 ? 'Protein left' : 'Protein'}</div><div class="v" style="color:${pl > 0 ? 'var(--text)' : 'var(--ok)'}">${pl > 0 ? fmt(pl,'g') + ' g' : 'done'}</div><div class="s">of ${T('p')} g</div></div></a>`;
 }
@@ -689,7 +702,7 @@ function weekStats(ks) {
   const beds = ks.map(k => ci(k).mc).filter(m => m && m.bed && !m.skipped).map(m => bedRel(m.bed));
   return {n: ks.length, logged: lg.length, complete: lg.filter(k => ci(k).lc !== false).length,
     kcal: avg(tot.map(t => t.kcal || 0)), p: avg(tot.map(t => t.p || 0)), caf: avg(lg.map(k => dayCalc(S.days[k]).tot.caf || 0)),
-    sleep: avg(ks.map(k => ci(k).sl).filter(x => x != null)), bed: beds.length ? bedFmt(mean(beds)) : null,
+    sleep: avg(ks.map(k => ci(k).sl != null ? ci(k).sl + napHours(ci(k)) : null).filter(x => x != null)), bed: beds.length ? bedFmt(mean(beds)) : null,
     hits: avg(ks.map(k => ci(k).hits).filter(x => x != null)), std: sum(ks.map(k => S.days[k]?.ci?.drinks ? stdDrinks(S.days[k]) : 0)),
     epred: avg(ks.map(k => ci(k).ePred).filter(x => x != null)), erep: avg(ks.map(k => ci(k).eRep).filter(x => x != null))};
 }
@@ -1017,6 +1030,8 @@ document.addEventListener('click', e => {
     case 'suppall': d.supp = d.supp || {}; dueList(k).forEach(x => d.supp[x.id] = true); touch(k); toast('All supplements ticked'); break;
     case 'repeatmeal': { const yk = addDays(k, -1); const its = (S.days[yk]?.items || []).filter(it => mealOf(it) === id); const t = S.date === todayKey() && mealByHour(new Date().getHours()) === id ? Date.now() : mealTime(k, id); its.forEach(it => d.items.push({id: uid(), f: it.f, q: it.q, o: {...(it.o || {})}, t, m: id})); touch(k); toast(`Added yesterday's ${MEALN[id].toLowerCase()}`); location.hash = '#today'; break; }
     case 'export': exportData(id); break;
+    case 'addnap': { const dr = S.napDraft || {s: hhmm(Date.now() - 3600e3), e: hhmm(Date.now())}; let st = atClock(k, dr.s), en = atClock(k, dr.e); if (en <= st) en += 864e5; if (en - st > 10 * 3600e3) { toast('That nap is over 10 h — check the times'); break; } d.ci = d.ci || {}; d.ci.naps = d.ci.naps || []; d.ci.naps.push({id: uid(), s: st, e: en}); S.napDraft = null; touch(k); toast(`Nap added · ${fmtH((en - st) / 3600e3)}`); break; }
+    case 'delnap': d.ci.naps = (d.ci.naps || []).filter(n => n.id !== id); touch(k); break;
     case 'openmeal': S.openMeal = S.openMeal === id ? null : id; render(); break;
     case 'itemmeal': { const it = d.items.find(x => x.id === el.dataset.item); if (it) { it.m = id; touch(k); } break; }
     case 'delitem': d.items = d.items.filter(x => x.id !== id); S.sheet = null; touch(k); toast('Removed'); break;
@@ -1054,6 +1069,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset?.nap) { S.napDraft = S.napDraft || {s: hhmm(Date.now() - 3600e3), e: hhmm(Date.now())}; S.napDraft[el.dataset.nap] = el.value; return; }
   if (el.dataset?.mc && S.mc) { S.mc[el.dataset.mc] = el.value; const sl = (atClock(S.date, S.mc.wake, false) - bedMs(S.date, S.mc.bed)) / 3600e3; const o = document.getElementById('mcsl'); if (o) o.textContent = sl > 0 && sl < 16 ? `${sl.toFixed(1)} h of sleep` : 'Check the times'; return; }
   const f = el.dataset?.pf; if (!f || !S.pf) return;
   S.pf[f] = el.value; const pv = document.getElementById('pfprev'); if (pv) pv.innerHTML = pfPreview();
