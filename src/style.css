@@ -141,3 +141,9 @@ input[type=date].field,input[type=time].field{appearance:none;-webkit-appearance
 .eg{border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:3px}
 .howto p{margin:8px 0;line-height:1.45}
 .drinkbtn{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;cursor:pointer;color:inherit;font:inherit}
+.strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-decoration:none;color:inherit;padding:12px}
+.sx{background:var(--tile);border-radius:14px;padding:10px 12px}.sx .l{font-size:12px;color:var(--muted);font-weight:600}
+.sx .v{font-family:var(--head);font-size:24px;font-weight:700;line-height:1.15}.sx .s{font-size:11px;color:var(--muted)}
+.sx[style*="--bc"]{border:2px solid var(--bc)}.sx[style*="--bc"] .v{color:var(--bc)}
+.qadd{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.qadd .btn{padding:0 4px;font-size:13px;height:44px}
+.a7{display:block;text-align:right;font-size:11px;color:var(--muted);font-weight:500}
