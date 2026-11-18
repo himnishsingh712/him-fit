@@ -1,12 +1,13 @@
 // Unit tests for the pure maths modules. Run: npm test
 import assert from 'node:assert/strict';
-import {computePlan, measuredMaintenance, navyBF, bmr, goalCheck, correctedWeight} from '../src/profile.js';
+import {computePlan, measuredMaintenance, navyBF, bmr, goalCheck, correctedWeight, rfm} from '../src/profile.js';
 import {energyAt, energyDay, caffeineLevel, interp} from '../src/energy.js';
 import {placeHits} from '../src/hits.js';
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('ok', name); };
 const P = {dob:'2004-05-10', sex:'m', heightCm:181, weightKg:66, activity:'sit', trainDays:4, sessionMin:60, goal:'leanbulk', pace:0.25, targetKg:72};
 t('BMR Mifflin-St Jeor', () => assert.equal(Math.round(bmr(P, 66, 22)), 1686));
 t('Navy body fat', () => assert.equal(navyBF({sex:'m', heightCm:181}, 78, 35).toFixed(1), '12.7'));
+t('RFM from waist and height', () => assert.equal(rfm({sex:'m', heightCm:181}, 78).toFixed(1), '17.6'));
 t('goal mismatch', () => { assert.ok(goalCheck({...P, goal:'recomp'}, 66)); assert.equal(goalCheck(P, 66), null); });
 t('weight correction by hours awake', () => { assert.equal(correctedWeight(69.5, 1), 69.5); assert.equal(correctedWeight(69.5, 10).toFixed(2), '68.67'); });
 t('measured maintenance from intake and weight trend', () => {

@@ -53,6 +53,8 @@ const go = async h => { w.location.hash = h; await wait(40); };
   ok('sleep shows times', $$('[data-act=sleeptime]').length === 2);
   setv('[data-act=ci][data-f=w]', '69.5'); await wait(20);
   ok('weight note shows correction rule', doc.body.textContent.includes('counts as'), '');
+  ok('tape card has six spots', ['waist','neck','chest','arm','thigh','calf'].every(f => $(`[data-act=ci][data-f=${f}]`)));
+  setv('[data-act=ci][data-f=waist]', '78'); await wait(10); setv('[data-act=ci][data-f=neck]', '35'); await wait(10); setv('[data-act=ci][data-f=arm]', '30'); await wait(10);
   ok('day tags card', $$('[data-act=daytag]').length === 5);
   setv('[data-nap=s]', '18:00', 'input'); setv('[data-nap=e]', '22:00', 'input'); click('[data-act=addnap]'); await wait(30);
   ok('nap added and counted in sleep', doc.body.textContent.includes('4 h today') && doc.body.textContent.includes('with naps'), txt('.card .muted.small'));
@@ -62,6 +64,7 @@ const go = async h => { w.location.hash = h; await wait(40); };
   await go('#nutrients'); ok('nutrients show caffeine', $$('.nrow').some(r => r.textContent.includes('Caffeine')));
   await go('#trends'); ok('trends render with weekday/weekend card', doc.body.textContent.includes('Weekdays vs weekends'));
   await go('#me'); ok('Me shows daily target', doc.body.textContent.includes('Daily target'));
+  ok('Me shows Navy and RFM body fat and measurements', doc.body.textContent.includes('RFM') && doc.body.textContent.includes('Navy') && doc.body.textContent.includes('Upper arm'));
   click('#sync'); await wait(20);
   for (const id of ['days', 'food', 'drinks', 'json']) { click(`[data-act=export][data-id=${id}]`); await wait(10); }
   ok('four exports', downloads.length === 4 && downloads.some(n => n.endsWith('.json')), downloads.join(','));

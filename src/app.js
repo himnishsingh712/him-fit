@@ -133,7 +133,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.5.2';
+const APP_VERSION = '1.5.3';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -150,7 +150,29 @@ function weightList() { return allKeys().filter(k => S.days[k]?.ci?.w > 0).map(k
 const EXCLUDE_TAGS = ['sick', 'travel'];
 const excluded = k => (S.days[k]?.ci?.tags || []).some(t => EXCLUDE_TAGS.includes(t));
 function intakeList() { return allKeys().filter(k => (S.days[k]?.items || []).length).map(k => ({k, kcal: dayCalc(S.days[k], {noSupps: true}).tot.kcal || 0, complete: excluded(k) ? false : S.days[k]?.ci?.lc})); }
-function tapeAt(k) { const ks = allKeys().filter(x => x <= k && S.days[x]?.ci?.waist > 0 && S.days[x]?.ci?.neck > 0); const x = ks[ks.length-1]; return x ? {k: x, waist: +S.days[x].ci.waist, neck: +S.days[x].ci.neck, hip: +S.days[x].ci.hip || null} : null; }
+function tapeAt(k) { const ks = allKeys().filter(x => x <= k && S.days[x]?.ci?.waist > 0); const x = ks[ks.length-1]; return x ? {k: x, waist: +S.days[x].ci.waist, neck: +S.days[x].ci.neck || null, hip: +S.days[x].ci.hip || null} : null; }
+const TAPE = [['waist','Waist','at the navel, relaxed, after a normal breath out'],['neck','Neck','just below the Adam\'s apple'],['chest','Chest','nipple level, arms down, normal breath'],['arm','Upper arm','right arm, flexed, biggest point'],['thigh','Mid-thigh','right leg, standing, halfway hip crease to kneecap'],['calf','Calf','right leg, standing, widest point']];
+const tapeFields = () => PROF()?.sex === 'f' ? [...TAPE, ['hip','Hips','widest point']] : TAPE;
+function tapeSeries(f) { return allKeys().filter(k => S.days[k]?.ci?.[f] > 0).map(k => ({k, v: +S.days[k].ci[f]})); }
+function lastTapeKey() { const ks = allKeys().filter(k => tapeFields().some(([f]) => S.days[k]?.ci?.[f] > 0)); return ks[ks.length-1] || null; }
+function tapeCard(k) {
+  const ci = S.days[k]?.ci || {}; const lt = lastTapeKey();
+  return `<div class="card"><div class="row"><div><h2>Tape measure</h2><div class="muted small">Once or twice a month, morning, same spots. ${lt ? `Last: ${shortDate(lt)}.` : 'Not measured yet.'} Body fat, lean mass and where your gain lands show on the Me tab.</div></div></div>
+    <div class="g2">${tapeFields().map(([f, n, how]) => `<label class="fl">${n} (cm)<input class="num" style="width:100%" type="number" inputmode="decimal" step="0.5" value="${ci[f] ?? ''}" placeholder="—" data-act="ci" data-f="${f}"><span class="muted" style="font-weight:400;font-size:11px">${how}</span></label>`).join('')}</div></div>`;
+}
+function tapeProgress() {
+  const p = PROF(); if (!p) return '';
+  const rows = tapeFields().map(([f, n]) => { const sr = tapeSeries(f); if (!sr.length) return null; const a = sr[0], b = sr[sr.length-1]; return {f, n, first: a, last: b, d: b.v - a.v}; }).filter(Boolean);
+  if (!rows.length) return `<div class="card span2"><h2>Measurements</h2><div class="muted small">No tape measurements yet. Add them in Check-in: waist, neck, chest, upper arm, mid-thigh, calf.</div></div>`;
+  // waist gained per kg gained since the first waist measurement (lean-bulk guardrail)
+  let guard = ''; const ws = tapeSeries('waist');
+  if (ws.length >= 2) { const wl = weightList(); const near = k => { const xs = wl.filter(x => Math.abs(parseKey(x.k) - parseKey(k)) <= 3 * 864e5); return xs.length ? mean(xs.map(x => x.w)) : null; };
+    const w0 = near(ws[0].k), w1 = near(ws[ws.length-1].k); if (w0 && w1 && Math.abs(w1 - w0) >= 1) { const r = (ws[ws.length-1].v - ws[0].v) / (w1 - w0);
+      guard = `<div class="flag ${w1 > w0 ? (r > 1 ? 'warn' : 'info') : 'info'}"><div><strong>${r >= 0 ? '+' : ''}${r.toFixed(2)} cm of waist per kg ${w1 > w0 ? 'gained' : 'lost'}</strong> since ${shortDate(ws[0].k)} (${(w1 - w0 >= 0 ? '+' : '')}${(w1 - w0).toFixed(1)} kg). ${w1 > w0 ? (r <= 0.7 ? 'Mostly lean gain.' : r <= 1 ? 'Some fat coming with it. Fine, keep an eye on it.' : 'Waist is growing too fast for the weight. The surplus is probably too big.') : ''}</div></div>`; } }
+  return `<div class="card span2"><div class="row"><h2>Measurements</h2><span class="small muted">since first measurement</span></div>${guard}
+    <div class="list">${rows.map(r => `<div class="li"><div class="main"><div class="t">${r.n}</div><div class="s">${r.first.v} cm (${shortDate(r.first.k)}) → ${r.last.v} cm (${shortDate(r.last.k)})</div></div><div class="num"><b style="color:${r.d === 0 ? 'var(--muted)' : (r.f === 'waist' ? (r.d > 0 ? 'var(--acc)' : 'var(--ok)') : (r.d > 0 ? 'var(--ok)' : 'var(--acc)'))}">${r.d > 0 ? '+' : ''}${r.d.toFixed(1)} cm</b></div></div>`).join('')}</div>
+    <div class="muted small">Tape error is about 0.5–1 cm, so changes under 1 cm are noise. Rule of thumb on a bulk: waist rising more than ~1 cm per 1–1.5 kg gained means too much fat.</div></div>`;
+}
 function ctxFor(k) { return {date: k, weights: weightList().filter(w => w.k <= k), intake: intakeList(), tape: tapeAt(k)}; }
 function plan(k = S.date) { const p = PROF(); if (!p) return null; const ck = weekStart(k) + '|' + DV + '|' + JSON.stringify(p); if (!planCache[ck]) planCache[ck] = computePlan(p, ctxFor(k)); return planCache[ck]; }
 const T = k => { const pl = plan(); if (pl && pl.targets[k] != null) return pl.targets[k]; return (CFG().targets && CFG().targets[k] != null) ? CFG().targets[k] : NMAP[k]?.t; };
@@ -245,6 +267,7 @@ function flags(k) {
     const y1 = addDays(k, -1), y2 = addDays(k, -2);
     if (y2 >= start && suppDue(s.id, y1) && suppDue(s.id, y2) && !S.days[y1]?.supp?.[s.id] && !S.days[y2]?.supp?.[s.id]) out.push({t:'warn', h:`${s.name} missed`, b:'2 days running.'});
   });
+  if (PROF() && k === todayKey()) { const lt = lastTapeKey(); const age = lt ? (parseKey(k) - parseKey(lt)) / 864e5 : null; if (lt == null || age >= 30) out.push({t:'info', h: lt ? 'Tape check due' : 'First tape check', b: lt ? `Last measured ${Math.round(age)} days ago. Six spots in Check-in, about 5 minutes.` : 'Waist, neck, chest, arm, thigh, calf in Check-in. About 5 minutes, once or twice a month.'}); }
   (cfg.upcoming || []).forEach(u => { const diff = (parseKey(u.date) - parseKey(k)) / 864e5; if (diff >= 0 && diff <= 7) out.push({t:'info', h: diff === 0 ? 'Today' : `In ${diff} day${diff>1?'s':''}`, b: u.text}); });
   return out;
 }
@@ -425,7 +448,7 @@ function viewCheckin() {
   let h = header('Check-in');
   h += `<div class="grid">`;
   h += `<div class="card"><div class="row"><label for="w"><h2>Weight</h2><div class="muted small">${ci.w && ci.wt ? (() => { const ha = weightHoursAwake(k); const pc = weightCorrPct(ha); return pc ? `Weighed ${ha.toFixed(0)} h after waking: counts as <b>${weightCorr(k).toFixed(1)} kg</b> (−${(pc * 100).toFixed(1)}%)` : 'Weighed soon after waking: counts as is'; })() : 'Any time; corrected to a morning number by hours since waking'}</div></label><span style="display:flex;align-items:center;gap:6px"><input id="w" class="num" type="number" inputmode="decimal" step="0.1" min="30" max="200" value="${ci.w ?? ''}" placeholder="—" data-act="ci" data-f="w"><span class="muted">kg</span></span></div>${lastWeightNote(k)}</div>`;
-  h += `<div class="card"><div class="row"><div><h2>Tape measure</h2><div class="muted small">Optional, about once a month. Morning, relaxed. Gives body-fat % on the Me tab.</div></div></div><div class="g2"><label class="fl">Waist at navel (cm)<input class="num" style="width:100%" type="number" inputmode="decimal" step="0.5" value="${ci.waist ?? ''}" placeholder="—" data-act="ci" data-f="waist"></label><label class="fl">Neck (cm)<input class="num" style="width:100%" type="number" inputmode="decimal" step="0.5" value="${ci.neck ?? ''}" placeholder="—" data-act="ci" data-f="neck"></label></div>${PROF()?.sex === 'f' ? `<label class="fl">Hips (cm)<input class="num" style="width:100%" type="number" inputmode="decimal" step="0.5" value="${ci.hip ?? ''}" placeholder="—" data-act="ci" data-f="hip"></label>` : ''}</div>`;
+  h += tapeCard(k);
   { const mc = ci.mc && !ci.mc.skipped ? ci.mc : null; const p = PROF() || {}; h += `<div class="card"><div class="row"><div><h2>Sleep last night</h2><div class="muted small">${ci.sl != null ? `<b>${ci.sl} h</b> · worked out from your times${napHours(ci) ? ` · <b>${(ci.sl + napHours(ci)).toFixed(1)} h</b> with naps` : ''}` : 'Set the times; hours are worked out for you'}</div></div></div><div class="g2"><label class="fl">Went to sleep<input class="field" type="time" value="${mc?.bed || p.bed || '01:00'}" data-act="sleeptime" data-f="bed"></label><label class="fl">Woke up<input class="field" type="time" value="${mc?.wake || p.wake || '09:00'}" data-act="sleeptime" data-f="wake"></label></div></div>`; }
   h += napCard(k);
   h += `<div class="card"><h2>Day tags</h2>${tagRow(ci.tags || [], 'daytag')}<div class="muted small">Count in your energy score. Sick and travel days are left out of maintenance and insights.</div></div>`;
@@ -469,9 +492,9 @@ function exportData(kind) {
   const ks = allKeys().filter(k => hasData(S.days[k])); const stamp = todayKey();
   if (kind === 'json') return download(`himfit-backup-${stamp}.json`, JSON.stringify({exported: new Date().toISOString(), version: APP_VERSION, config: S.config, days: S.days}, null, 1), 'application/json');
   if (kind === 'days') {
-    const rows = [['date','kcal','protein_g','carbs_g','fat_g','fibre_g','sodium_mg','caffeine_mg','processed_pct','water_ml','weight_raw_kg','weight_corrected_kg','weighed_at','sleep_h','nap_h','bed','wake','sleep_quality','mood','body_feel','energy_rated','energy_predicted','model','bong_hits','cigarettes','std_drinks','trained','kcal_burned','tags','log_complete','kcal_target','protein_target']];
+    const rows = [['date','kcal','protein_g','carbs_g','fat_g','fibre_g','sodium_mg','caffeine_mg','processed_pct','water_ml','weight_raw_kg','weight_corrected_kg','weighed_at','waist_cm','neck_cm','chest_cm','arm_cm','thigh_cm','calf_cm','sleep_h','nap_h','bed','wake','sleep_quality','mood','body_feel','energy_rated','energy_predicted','model','bong_hits','cigarettes','std_drinks','trained','kcal_burned','tags','log_complete','kcal_target','protein_target']];
     ks.forEach(k => { const d = S.days[k], ci = d.ci || {}, c = dayCalc(d), t = c.tot, mc = ci.mc || {}; const pl = plan(k);
-      rows.push([k, Math.round(t.kcal || 0), Math.round(t.p || 0), Math.round(t.c || 0), Math.round(t.f || 0), Math.round(t.fib || 0), Math.round(t.na || 0), Math.round(t.caf || 0), c.processed == null ? '' : Math.round(c.processed), d.water || 0, ci.w ?? '', ci.w ? weightCorr(k).toFixed(2) : '', ci.wt ? new Date(ci.wt).toISOString() : '', ci.sl ?? '', napHours(ci) ? napHours(ci).toFixed(2) : '', mc.bed || '', mc.wake || '', mc.sq != null ? WORDS.sq[mc.sq] : '', mc.mood != null ? WORDS.mood[mc.mood] : '', mc.feel != null ? WORDS.feel[mc.feel] : '', ci.eRep ?? '', ci.ePred ?? '', ci.eVer || '', ci.hits ?? '', ci.cigs ?? '', ci.drinks ? stdDrinks(d).toFixed(1) : '', ci.tr == null ? '' : ci.tr ? 'yes' : 'no', ci.burn ?? '', (ci.tags || []).join(' '), ci.lc == null ? '' : ci.lc ? 'yes' : 'no', pl ? pl.targets.kcal : '', pl ? pl.targets.p : '']); });
+      rows.push([k, Math.round(t.kcal || 0), Math.round(t.p || 0), Math.round(t.c || 0), Math.round(t.f || 0), Math.round(t.fib || 0), Math.round(t.na || 0), Math.round(t.caf || 0), c.processed == null ? '' : Math.round(c.processed), d.water || 0, ci.w ?? '', ci.w ? weightCorr(k).toFixed(2) : '', ci.wt ? new Date(ci.wt).toISOString() : '', ci.waist ?? '', ci.neck ?? '', ci.chest ?? '', ci.arm ?? '', ci.thigh ?? '', ci.calf ?? '', ci.sl ?? '', napHours(ci) ? napHours(ci).toFixed(2) : '', mc.bed || '', mc.wake || '', mc.sq != null ? WORDS.sq[mc.sq] : '', mc.mood != null ? WORDS.mood[mc.mood] : '', mc.feel != null ? WORDS.feel[mc.feel] : '', ci.eRep ?? '', ci.ePred ?? '', ci.eVer || '', ci.hits ?? '', ci.cigs ?? '', ci.drinks ? stdDrinks(d).toFixed(1) : '', ci.tr == null ? '' : ci.tr ? 'yes' : 'no', ci.burn ?? '', (ci.tags || []).join(' '), ci.lc == null ? '' : ci.lc ? 'yes' : 'no', pl ? pl.targets.kcal : '', pl ? pl.targets.p : '']); });
     return download(`himfit-days-${stamp}.csv`, toCSV(rows));
   }
   if (kind === 'food') {
@@ -817,11 +840,12 @@ function viewMe() {
   const tl = (l, v, s, c) => `<div class="tile"><div class="l">${l}</div><div class="v" ${c ? `style="color:${c}"` : ''}>${v}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
   h += `<div class="card span2"><div class="row"><h2>Body now</h2><span class="small muted">${b.age} yrs · ${p.heightCm} cm</span></div><div class="tiles t3">
     ${tl('Weight', b.kg.toFixed(1) + ' kg', '7-day average')}
-    ${tl('Body fat', b.bf != null ? b.bf.toFixed(1) + '%' : '—', b.bf != null ? bfBand(b.bf, p.sex) + ' · tape ' + shortDate(b.tape.k) : 'measure waist + neck')}
+    ${tl('Body fat', b.bf != null ? b.bf.toFixed(1) + '%' : '—', b.bf != null ? `${bfBand(b.bf, p.sex)} · ${b.bfNavy != null ? 'Navy ' + b.bfNavy.toFixed(1) : ''}${b.bfNavy != null && b.bfRfm != null ? ' / ' : ''}${b.bfRfm != null ? 'RFM ' + b.bfRfm.toFixed(1) : ''} · ${shortDate(b.tape.k)}` : 'measure waist (+ neck)')}
     ${tl('FFMI', b.ffmiAdj != null ? b.ffmiAdj.toFixed(1) : '—', b.ffmiAdj != null ? ffmiBand(b.ffmiAdj) + ' · lean ' + b.lean.toFixed(1) + ' kg' : 'needs body fat')}
     ${tl('BMR', fmt(b.bmrNow,'kcal'), 'kcal at full rest')}
     ${tl('Waist / height', b.whtr != null ? b.whtr.toFixed(2) : '—', b.whtr != null ? (b.whtr < 0.5 ? 'healthy, under 0.5' : 'above 0.5: belly fat risk') : 'needs waist')}
     ${tl('BMI', b.bmi.toFixed(1), bmiBand(b.bmi) + ' · ignores muscle')}</div></div>`;
+  h += tapeProgress();
   const pct = Math.round(pl.blend * 100);
   h += `<div class="card span2"><div class="row"><h2>Your calories, step by step</h2><span class="small muted">week of ${shortDate(pl.weekStart)}</span></div>
     <div class="steps">

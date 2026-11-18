@@ -47,6 +47,8 @@ export function navyBF(p, waist, neck, hip) {
   if (waist - neck <= 0) return null;
   return 495 / (1.0324 - 0.19077 * L(waist - neck) + 0.15456 * L(p.heightCm)) - 450;
 }
+// Relative Fat Mass (Woolcott & Bergman 2018): needs only height and waist. Similar accuracy to the Navy method against DEXA.
+export function rfm(p, waist) { if (!waist || !p.heightCm) return null; return (p.sex === 'f' ? 76 : 64) - 20 * p.heightCm / waist; }
 // least-squares slope of weight vs day index, in kg per day
 export function slope(pts) {
   if (pts.length < 2) return null; const xs = pts.map(p => p.x), ys = pts.map(p => p.y); const mx = mean(xs), my = mean(ys);
@@ -113,7 +115,8 @@ export function bodyNow(p, ctx) {
   const h = p.heightCm / 100; const bmi = kg / (h * h);
   const tape = ctx.tape; // {waist, neck, hip, k}
   const tapeFresh = tape && daysBetween(tape.k, ctx.date) <= 60;
-  const bf = tapeFresh ? navyBF(p, tape.waist, tape.neck, tape.hip) : null;
+  const bfNavy = tapeFresh ? navyBF(p, tape.waist, tape.neck, tape.hip) : null; const bfRfm = tapeFresh ? rfm(p, tape.waist) : null;
+  const bfs = [bfNavy, bfRfm].filter(x => x != null); const bf = bfs.length ? bfs.reduce((a, b) => a + b, 0) / bfs.length : null;
   const lean = bf != null ? kg * (1 - bf / 100) : null;
   const ffmi = lean != null ? lean / (h * h) : null;
   const ffmiAdj = ffmi != null ? ffmi + 6.1 * (1.8 - h) : null;
@@ -123,7 +126,7 @@ export function bodyNow(p, ctx) {
   const pts = ctx.weights.filter(w => w.k >= from).map(w => ({x: daysBetween(from, w.k), y: w.w}));
   const sp = pts.length >= 5 && pts[pts.length-1].x - pts[0].x >= 7 ? slope(pts) * 7 : null;
   const age = ageAt(p.dob, ctx.date) ?? 22;
-  return {kg, bmi, bf, lean, ffmi, ffmiAdj, whtr, tape: tapeFresh ? tape : null, paceActual: sp, bmrNow: bmr(p, kg, age), age};
+  return {kg, bmi, bf, bfNavy, bfRfm, lean, ffmi, ffmiAdj, whtr, tape: tapeFresh ? tape : null, paceActual: sp, bmrNow: bmr(p, kg, age), age};
 }
 
 export function goalCheck(p, kgNow) {
