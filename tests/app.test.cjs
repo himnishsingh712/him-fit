@@ -30,7 +30,7 @@ const go = async h => { w.location.hash = h; await wait(40); };
   ok('Me tab after save', txt('h1') === 'Him');
   await go('#today');
   ok('strip shows energy and calories left', $('.strip') && txt('.strip').includes('Calories left'), txt('.strip'));
-  ok('quick-add row', $$('.qadd .btn').length === 4);
+  ok('quick-add row without chai', $$('.qadd .btn').length === 4 && !$('[data-act=qchai]'));
   ok('morning card shown', !!$('.mcard'));
   click('[data-act=mcset][data-f=sq][data-v="3"]'); await wait(5); click('[data-act=mcset][data-f=mood][data-v="2"]'); await wait(5); click('[data-act=mcset][data-f=feel][data-v="1"]'); await wait(5);
   click('[data-act=mctag][data-id=exam]'); await wait(5); click('[data-act=mcsave]'); await wait(60);
@@ -43,10 +43,10 @@ const go = async h => { w.location.hash = h; await wait(40); };
   ok('back on Today with the meal', $$('.mealrow').length === 1, $$('.mealrow').length);
   click('[data-act=qrepeat]'); await wait(40);
   ok('repeat last meal adds items', txt('.mealrow .s').includes('Paratha taco × 2, Paratha taco × 2') || $$('.mealrow').length >= 1);
-  click('[data-act=qchai]'); await wait(20);
   for (let i = 0; i < 6; i++) { click('[data-act=qhit]'); await wait(5); }
   ok('catch-up hits get spread', txt('.flag.info').includes('6 hits spread over'), txt('.flag.info'));
-  if ($('[data-act=suppall]')) { click('[data-act=suppall]'); await wait(20); }
+  if ($('.qadd [data-act=suppall]')) { click('.qadd [data-act=suppall]'); await wait(20); }
+  ok('quick-add shows supps done', !!$('.qadd [data-act=suppundo]'));
   ok('took all ticks supplements', $$('input[data-act=supp]').every(c => c.checked));
   await go('#checkin');
   ok('no sleep-hours stepper', !$('[data-act=cistep][data-id=sl]'));
