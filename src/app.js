@@ -133,7 +133,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.5.2';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -680,7 +680,9 @@ function todayStrip(k, tot) {
     <div class="sx"><div class="l">${pl > 0 ? 'Protein left' : 'Protein'}</div><div class="v" style="color:${pl > 0 ? 'var(--text)' : 'var(--ok)'}">${pl > 0 ? fmt(pl,'g') + ' g' : 'done'}</div><div class="s">of ${T('p')} g</div></div></a>`;
 }
 function quickAdd(k) {
-  return `<div class="span2 qadd"><button class="btn" data-act="qhit">+1 hit</button><button class="btn" data-act="qchai">+ Chai</button><button class="btn wbtn" data-act="water" data-n="250">+250 ml</button><button class="btn" data-act="qrepeat">Repeat last meal</button></div>`;
+  const d = day(k), due = dueList(k), done = due.length && due.every(x => d.supp?.[x.id]);
+  const sup = !due.length ? '' : done ? `<button class="btn on" data-act="suppundo" aria-label="Supplements taken, tap to undo">✓ Supps</button>` : `<button class="btn" data-act="suppall">Took supps</button>`;
+  return `<div class="span2 qadd" style="grid-template-columns:repeat(${sup ? 4 : 3},minmax(0,1fr))"><button class="btn" data-act="qhit">+1 hit</button><button class="btn wbtn" data-act="water" data-n="250">+250 ml</button><button class="btn" data-act="qrepeat">Repeat last meal</button>${sup}</div>`;
 }
 function lastSitting() {
   for (const k of [todayKey(), addDays(todayKey(), -1)]) { const its = (S.days[k]?.items || []).filter(it => it.t).sort((a, b) => a.t - b.t); if (its.length) { const t = its[its.length-1].t; return its.filter(it => t - it.t <= 20 * 60e3); } }
@@ -1027,6 +1029,7 @@ document.addEventListener('click', e => {
     case 'qchai': { const dd = day(todayKey()); dd.ci = dd.ci || {}; dd.ci.drinks = dd.ci.drinks || []; dd.ci.drinks.push({id: uid(), k: 'caf', d: 'chai', sugar: 1, t: Date.now()}); touch(todayKey()); toast('Chai logged · 1 tsp sugar'); break; }
     case 'qrepeat': { const its = lastSitting(); if (!its.length) { toast('Nothing to repeat yet'); break; } const now = Date.now(), m = mealByHour(new Date().getHours()); const dd = day(todayKey()); its.forEach(it => dd.items.push({id: uid(), f: it.f, q: it.q, o: {...(it.o || {})}, t: now, m})); touch(todayKey()); toast(`Repeated: ${its.map(itemLabel).join(', ')}`); break; }
     case 'hidereview': S.hideReview = true; render(); break;
+    case 'suppundo': d.supp = d.supp || {}; dueList(k).forEach(x => d.supp[x.id] = false); touch(k); toast('Supplements unticked'); break;
     case 'suppall': d.supp = d.supp || {}; dueList(k).forEach(x => d.supp[x.id] = true); touch(k); toast('All supplements ticked'); break;
     case 'repeatmeal': { const yk = addDays(k, -1); const its = (S.days[yk]?.items || []).filter(it => mealOf(it) === id); const t = S.date === todayKey() && mealByHour(new Date().getHours()) === id ? Date.now() : mealTime(k, id); its.forEach(it => d.items.push({id: uid(), f: it.f, q: it.q, o: {...(it.o || {})}, t, m: id})); touch(k); toast(`Added yesterday's ${MEALN[id].toLowerCase()}`); location.hash = '#today'; break; }
     case 'export': exportData(id); break;
