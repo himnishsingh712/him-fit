@@ -32,6 +32,8 @@ export const NUTRIENTS = [
   {k:'b12', n:'B12', u:'mcg', t:2.4, kind:'min', g:'vitamin'},
   {k:'cho', n:'Choline', u:'mg', t:550, kind:'min', g:'vitamin'},
   {k:'o3',  n:'Omega-3 (EPA+DHA)', u:'mg', t:250, kind:'min', g:'vitamin'},
+  {k:'caf', n:'Caffeine', u:'mg', t:400, kind:'max', g:'stim'},
+  {k:'tau', n:'Taurine', u:'mg', t:null, kind:'info', g:'stim'},
   {k:'alc', n:'Alcohol', u:'g', t:null, kind:'info', g:'other'},
 ];
 export const NK = NUTRIENTS.map(x => x.k);
@@ -72,6 +74,17 @@ export const ING = {
   water:    {name:'Water', nova:1, v:{kcal:0}},
   sevenup:  {name:'7Up', nova:4, v:{kcal:46,c:11.4,sug:11.4,na:27}},
   oj:       {name:'Tropicana 100% Orange', nova:1, v:{kcal:41,p:0.8,c:9.3,sug:8.3,fib:0.4,na:1,k:200,ca:10,mg:11,vC:28,b1:0.09,fol:30}},
+  // ---- coffee, tea, energy drinks (per 100 ml or 100 g) ----
+  espresso: {name:'Espresso', nova:1, v:{kcal:9,p:0.1,k:115,mg:80,b2:0.18,b3:5.2,caf:212}},
+  milk:     {name:'Toned milk (3% fat)', nova:1, v:{kcal:58,p:3.1,c:4.7,f:3,sat:1.9,sug:4.7,chol:9,na:50,k:150,ca:120,mg:11,ph:95,zn:0.4,io:15,se:2,vA:30,vD:0.1,b1:0.04,b2:0.18,b3:0.1,b6:0.04,fol:5,b12:0.4,cho:15}},
+  sugar:    {name:'Sugar', nova:2, v:{kcal:400,c:100,sug:100}},
+  instant:  {name:'Instant coffee powder', nova:3, v:{kcal:353,p:12,c:75,k:3500,mg:330,b3:28,caf:3142}},
+  chaipatti:{name:'Tea leaves (CTC), as brewed', nova:1, v:{caf:2000,k:800}},
+  blacktea: {name:'Black tea, brewed', nova:1, v:{kcal:1,k:37,caf:20}},
+  greentea: {name:'Green tea, brewed', nova:1, v:{kcal:1,k:8,caf:12}},
+  redbull:  {name:'Red Bull (India label)', nova:4, v:{kcal:46,c:11,sug:11,na:40,b2:0.2,b3:2.4,caf:30,tau:400}},
+  monster:  {name:'Monster Energy (India label)', nova:4, v:{kcal:47,c:12,sug:11,na:80,b3:2.5,b6:0.34,caf:30,tau:400}},
+  hell:     {name:'Hell Energy Classic (India label)', nova:4, v:{kcal:46,c:11,sug:11,na:40,b2:0.2,b3:2.4,caf:30,tau:400}},
   cran:     {name:'Real Cranberry', nova:4, v:{kcal:56,c:13.6,sug:12.9,na:4.9,k:30,vC:10}},
 };
 
@@ -103,6 +116,23 @@ export const DRINKS = [
   {id:'rum', name:'Rum', sub:'40%', presets:[30,60,90]},
   {id:'gin', name:'Gin', sub:'40%', presets:[30,60,90]},
   {id:'vodka', name:'Vodka', sub:'40%', presets:[30,60,90]},
+];
+// Coffee, tea and energy drinks: one serving each. parts in ml (liquids) or g (powders).
+// shots: espresso drinks can take 1–3 shots (30 ml each). sugar: teaspoons asked every time (4 g each).
+export const CAFF = [
+  {id:'esp1', cat:'coffee', name:'Espresso', sub:'single shot, 30 ml', parts:[['espresso',30]]},
+  {id:'esp2', cat:'coffee', name:'Double espresso', sub:'2 shots, 60 ml', parts:[['espresso',60]]},
+  {id:'americano', cat:'coffee', name:'Americano', sub:'espresso + hot water', shots:2, parts:[]},
+  {id:'cappuccino', cat:'coffee', name:'Cappuccino', sub:'espresso + 150 ml milk', shots:1, parts:[['milk',150]]},
+  {id:'latte', cat:'coffee', name:'Latte', sub:'espresso + 220 ml milk', shots:1, parts:[['milk',220]]},
+  {id:'iced', cat:'coffee', name:'Iced coffee', sub:'espresso + 60 ml milk, ice', shots:2, parts:[['milk',60]]},
+  {id:'coldcoffee', cat:'coffee', name:'Cold coffee', sub:'3 g instant + 200 ml milk, blended', parts:[['instant',3],['milk',200]]},
+  {id:'chai', cat:'tea', name:'Chai', sub:'1 cup: 75 ml milk + tea leaves', parts:[['chaipatti',2],['milk',75]]},
+  {id:'blacktea', cat:'tea', name:'Black tea', sub:'200 ml, no milk', parts:[['blacktea',200]]},
+  {id:'greentea', cat:'tea', name:'Green tea', sub:'200 ml', parts:[['greentea',200]]},
+  {id:'redbull', cat:'energy', name:'Red Bull', sub:'250 ml can', sizes:[250], parts:[['redbull',250]], nosugar:true},
+  {id:'monster', cat:'energy', name:'Monster', sub:'350 ml can', sizes:[350,500], parts:[['monster',350]], nosugar:true},
+  {id:'hell', cat:'energy', name:'Hell', sub:'250 ml can', sizes:[250], parts:[['hell',250]], nosugar:true},
 ];
 export const MIXERS = [
   {id:'none', name:'No mixer'}, {id:'soda', name:'Soda'}, {id:'cola', name:'Cola'}, {id:'water', name:'Water'},

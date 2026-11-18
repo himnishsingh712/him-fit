@@ -1,4 +1,5 @@
-import {NUTRIENTS, ING, FOODS, STANDARD_DAY, DRINKS, MIXERS, SUPPS, DEFAULT_CONFIG} from './data.js';
+import {NUTRIENTS, ING, FOODS, STANDARD_DAY, DRINKS, MIXERS, SUPPS, DEFAULT_CONFIG, CAFF} from './data.js';
+import {energyAt, energyDay, band, ratingBand} from './energy.js';
 import {sb} from './supabase.js';
 import {GOALS, GMAP, ACTIVITY, AMAP, computePlan, bodyNow, goalCheck, etaWeeks, bmiBand, ffmiBand, bfBand, weekStart, formulaMaintenance, ageAt} from './profile.js';
 // ================= utilities =================
@@ -20,6 +21,7 @@ const NMAP = Object.fromEntries(NUTRIENTS.map(n => [n.k, n]));
 const FMAP = Object.fromEntries(FOODS.map(f => [f.id, f]));
 const DMAP = Object.fromEntries(DRINKS.map(d => [d.id, d]));
 const SMAP = Object.fromEntries(SUPPS.map(s => [s.id, s]));
+const CMAP = Object.fromEntries(CAFF.map(c => [c.id, c]));
 function fmt(v, u) {
   if (v == null || isNaN(v)) return '—';
   if (u === 'kcal' || u === 'mg' || (u === 'mcg' && v >= 10)) return Math.round(v).toLocaleString('en-IN');
@@ -49,6 +51,8 @@ const MEALS = [
 const MEALN = Object.fromEntries(MEALS.map(m => [m.id, m.n]));
 function mealByHour(h) { return h >= 5 && h < 11 ? 'breakfast' : h < 12 ? 'msnack' : h < 15 ? 'lunch' : h < 19 ? 'esnack' : h < 23 ? 'dinner' : 'late'; }
 const mealOf = it => it.m || (it.t ? mealByHour(new Date(it.t).getHours()) : 'breakfast');
+const MEAL_T = {breakfast:null, msnack:'11:30', lunch:'13:30', esnack:'17:00', dinner:'21:00', late:'00:30'};
+function mealTime(k, m) { if (m === 'breakfast') { const w = S.days[k]?.ci?.mc?.wake || PROF()?.wake || '09:00'; return atClock(k, w, false) + 45 * 60e3; } return atClock(k, MEAL_T[m]); }
 const STD_MEAL = {omelette:'breakfast', toast:'breakfast', cosmix:'breakfast', sattu:'breakfast', dahi:'esnack', banana:'esnack', taco:'dinner'};
 
 // ================= nutrition engine =================
@@ -68,8 +72,16 @@ const fq = q => { const w = Math.floor(q), r = Math.round((q - w) * 4) / 4; retu
 const stepOf = fid => FMAP[fid]?.step || 0.5;
 const roundStep = (v, st) => Math.round((+v || 0) / st) * st;
 function itemVec(it) { return vecAdd({}, foodUnit(it.f, it.o || {}), it.q); }
+function cafParts(dr) {
+  const c = CMAP[dr.d]; if (!c) return [];
+  const parts = c.parts.map(([i, g]) => [i, c.sizes && ING[i] && c.cat === 'energy' ? (dr.size || c.sizes[0]) : g]);
+  if (c.shots) parts.push(['espresso', 30 * (dr.shots || c.shots)]);
+  if (!c.nosugar && dr.sugar) parts.push(['sugar', 4 * dr.sugar]);
+  return parts;
+}
 function drinkVec(dr) {
   const t = {};
+  if (dr.k === 'caf') { cafParts(dr).forEach(([i, g]) => vecAdd(t, ING[i].v, g / 100)); return t; }
   if (ING[dr.d]) vecAdd(t, ING[dr.d].v, dr.ml / 100);
   if (dr.m && dr.m !== 'none' && ING[dr.m]) vecAdd(t, ING[dr.m].v, (dr.mml || 0) / 100);
   return t;
@@ -82,6 +94,7 @@ function itemLabel(it) {
   return it.q !== 1 ? `${n} × ${fq(it.q)}` : n;
 }
 function drinkLabel(dr) {
+  if (dr.k === 'caf') { const c = CMAP[dr.d]; if (!c) return 'Drink'; return c.name + (c.shots ? ` · ${dr.shots || c.shots} shot${(dr.shots || c.shots) > 1 ? 's' : ''}` : '') + (c.sizes && c.sizes.length > 1 ? ` ${dr.size || c.sizes[0]} ml` : '') + (!c.nosugar ? (dr.sugar ? ` · ${dr.sugar} tsp sugar` : ' · no sugar') : ''); }
   const d = DMAP[dr.d]; const m = MIXERS.find(x => x.id === dr.m);
   return `${d ? d.name : 'Drink'} ${dr.ml} ml` + (m && m.id !== 'none' ? ` + ${m.name.toLowerCase()} ${dr.mml || 0} ml` : '');
 }
@@ -97,7 +110,7 @@ function dayCalc(day, opts = {}) {
   });
   (day?.ci?.drinks || []).forEach(dr => {
     const v = drinkVec(dr); vecAdd(tot, v, 1); contrib.push({label: drinkLabel(dr), v});
-    novaKcal([[dr.d, dr.ml]], 1, nova); if (dr.m && dr.m !== 'none') novaKcal([[dr.m, dr.mml || 0]], 1, nova);
+    if (dr.k === 'caf') novaKcal(cafParts(dr), 1, nova); else { novaKcal([[dr.d, dr.ml]], 1, nova); if (dr.m && dr.m !== 'none') novaKcal([[dr.m, dr.mml || 0]], 1, nova); }
   });
   if (!opts.noSupps) Object.entries(day?.supp || {}).forEach(([sid, on]) => {
     if (!on || !SMAP[sid]) return; vecAdd(tot, SMAP[sid].v, 1); contrib.push({label: SMAP[sid].name + ' (supplement)', v: SMAP[sid].v, supp: true});
@@ -105,7 +118,7 @@ function dayCalc(day, opts = {}) {
   const kc = sum(Object.values(nova));
   return {tot, contrib, processed: kc ? (nova[4] || 0) / kc * 100 : null, hasFood: (day?.items || []).length > 0};
 }
-function stdDrinks(day) { return sum((day?.ci?.drinks || []).map(dr => (ING[dr.d]?.v.alc || 0) * dr.ml / 100)) / 10; }
+function stdDrinks(day) { return sum((day?.ci?.drinks || []).map(dr => dr.k === 'caf' ? 0 : (ING[dr.d]?.v.alc || 0) * (dr.ml || 0) / 100)) / 10; }
 
 // ================= supplement schedule =================
 function suppDue(sid, k) {
@@ -118,7 +131,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -234,13 +247,32 @@ function pearson(xs, ys) {
   let a = 0, b = 0, c = 0; for (let i = 0; i < n; i++) { a += (xs[i]-mx)*(ys[i]-my); b += (xs[i]-mx)**2; c += (ys[i]-my)**2; }
   return b && c ? a / Math.sqrt(b*c) : 0;
 }
+// ================= energy =================
+const atClock = (k, hhmm, afterMidnightIsNext = true) => { const [h, m] = (hhmm || '00:00').split(':').map(Number); const d = parseKey(k); d.setHours(h, m, 0, 0); if (afterMidnightIsNext && h < 6) d.setDate(d.getDate() + 1); return d.getTime(); };
+const minOf = hhmm => { const [h, m] = (hhmm || '00:00').split(':').map(Number); return h * 60 + m; };
+// bedtime belongs to the night before day k: evening times are on k-1, after-midnight times on k
+const bedMs = (k, hhmm) => { const [h, m] = hhmm.split(':').map(Number); const d = parseKey(k); if (h >= 12) d.setDate(d.getDate() - 1); d.setHours(h, m, 0, 0); return d.getTime(); };
+function sleepTimes(k) { const p = PROF() || {}; const mc = S.days[k]?.ci?.mc; const bed = mc?.bed || p.bed || '01:00', wake = mc?.wake || p.wake || '09:00'; return {bed: bedMs(k, bed), wake: atClock(k, wake, false), real: !!(mc && mc.bed && !mc.skipped)}; }
+function endOfDayMs(k) { const p = PROF() || {}; return atClock(addDays(k, 1), p.bed || '01:00', false) - (minOf(p.bed || '01:00') >= 720 ? 864e5 : 0); }
+function energyInput(k) {
+  const d = S.days[k] || {}, y = S.days[addDays(k, -1)] || {}; const ci = d.ci || {}; const st = sleepTimes(k); const p = PROF() || {};
+  const vec = (v, t) => ({t, kcal: v.kcal || 0, p: v.p || 0, c: v.c || 0, f: v.f || 0, fib: v.fib || 0, sug: v.sug || 0, alc: v.alc || 0});
+  const intakes = [...(d.items || []).map(it => vec(itemVec(it), it.t || st.wake)), ...(ci.drinks || []).filter(dr => dr.t).map(dr => vec(drinkVec(dr), dr.t))];
+  const caffeine = [...(y.ci?.drinks || []), ...(ci.drinks || [])].filter(dr => dr.t).map(dr => ({t: dr.t, mg: drinkVec(dr).caf || 0})).filter(x => x.mg > 0);
+  let water = (d.wl || []).slice(); const logged = sum(water.map(x => x.ml)); const rest = (d.water || 0) - logged;
+  if (rest > 0) { const span = Math.max(1, Math.min(Date.now(), endOfDayMs(k)) - st.wake); for (let i = 0; i < 4; i++) water.push({t: st.wake + span * (i + 0.5) / 4, ml: rest / 4}); }
+  const h7 = rangeKeys(addDays(k, -1), 7).map(x => S.days[x]?.ci?.hits).filter(x => x != null);
+  const yEve = atClock(addDays(k, -1), '18:00', false), yLate = atClock(addDays(k, -1), '21:00', false);
+  const lastNight = {std: sum((y.ci?.drinks || []).filter(dr => dr.t >= yEve).map(dr => (drinkVec(dr).alc || 0) / 10)), lateHits: (y.ci?.hitsT || []).filter(t => t >= yLate).length, totalHits: y.ci?.hits || 0};
+  return {wake: st.wake, bed: st.bed, real: st.real, usualWakeMin: minOf(p.wake || '09:00'), usualBedMin: minOf(p.bed || '01:00'),
+    priorSleep: [1, 2, 3].map(i => S.days[addDays(k, -i)]?.ci?.sl ?? null), report: ci.mc && !ci.mc.skipped ? {sq: ci.mc.sq, mood: ci.mc.mood, feel: ci.mc.feel} : null,
+    intakes, caffeine, water, hits: ci.hitsT || [], hitsAvg7: h7.length ? mean(h7) : 0, lastNight, targets: {kcal: T('kcal'), p: T('p'), water: waterTarget()}};
+}
+function energyFor(k, now = Date.now()) { const inp = energyInput(k); const end = Math.max(endOfDayMs(k), Math.min(now, endOfDayMs(k) + 3 * 3600e3)); return {inp, ...energyDay(inp, Math.min(now, end), end), end}; }
 const median = a => { const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length/2); return s.length % 2 ? s[m] : (s[m-1]+s[m])/2; };
 const INSIGHTS = [
-  {x:'Bong hits', y:'sleep', fx: d => d?.ci?.hits, fy: (d, n) => n?.ci?.sl, lag:1, yu:'h', verb:'you slept', after:'the next night', yd:1},
   {x:'Drinks (std)', y:'sleep', fx: d => Array.isArray(d?.ci?.drinks) ? stdDrinks(d) : undefined, fy: (d, n) => n?.ci?.sl, lag:1, yu:'h', verb:'you slept', after:'the next night', yd:1, bin:true},
-  {x:'Cigarettes', y:'sleep', fx: d => d?.ci?.cigs, fy: (d, n) => n?.ci?.sl, lag:1, yu:'h', verb:'you slept', after:'the next night', yd:1},
   {x:'Sleep', y:'calories', fx: d => d?.ci?.sl, fy: d => (d?.items || []).length ? dayCalc(d, {noSupps:true}).tot.kcal : undefined, lag:0, yu:'kcal', verb:'you ate', after:'that day', yd:0},
-  {x:'Bong hits', y:'calories', fx: d => d?.ci?.hits, fy: d => (d?.items || []).length ? dayCalc(d, {noSupps:true}).tot.kcal : undefined, lag:0, yu:'kcal', verb:'you ate', after:'that day', yd:0},
 ];
 function insights() {
   const ks = allKeys(); return INSIGHTS.map(I => {
@@ -307,6 +339,8 @@ function viewToday() {
   let h = header(k === todayKey() ? 'Today' : 'Day', {right: `<div style="display:flex;gap:6px;align-items:center"><a class="pill" href="#checkin" style="display:inline-flex;align-items:center;text-decoration:none">Check-in</a><div class="datenav"><button class="iconbtn" data-act="day" data-n="-1" aria-label="Previous day">${ic('left')}</button><button class="iconbtn" data-act="day" data-n="1" aria-label="Next day" ${k >= todayKey() ? 'disabled' : ''}>${ic('right')}</button></div></div>`});
   const fl = k === todayKey() ? flags(k) : [];
   h += '<div class="grid">';
+  if (k === todayKey() && !d.ci?.mc) h += morningCard(k);
+  try { h += energyCard(k); } catch (er) { console.error(er); }
   if (fl.length) h += `<div class="span2" style="display:flex;flex-direction:column;gap:8px">${fl.map(f => `<div class="flag ${f.t}">${ic(f.t === 'warn' ? 'warn' : 'info', 18, 2.2)}<div><strong>${esc(f.h)}</strong> ${esc(f.b)}</div></div>`).join('')}</div>`;
   const kc = tot.kcal || 0, p = tot.p || 0;
   h += `<div class="card"><div><div class="row"><b>Calories</b><span class="big">${fmt(kc,'kcal')} <small>/ ${fmt(T('kcal'),'kcal')} kcal</small></span></div><div class="bar" style="margin-top:8px"><div style="width:${Math.min(100, kc/T('kcal')*100)}%;background:var(--acc)"></div></div></div>
@@ -318,7 +352,7 @@ function viewToday() {
   if (!items.length && !drinks.length) h += `<div class="muted small">Nothing logged yet. Tap + to add food.</div>`;
   else h += `<div class="list">${MEALS.map(m => { const its = items.filter(it => mealOf(it) === m.id); if (!its.length) return ''; const mt = {}; its.forEach(it => vecAdd(mt, itemVec(it), 1)); const open = S.openMeal === m.id;
       return `<button class="mealrow" data-act="openmeal" data-id="${m.id}" aria-expanded="${open}"><div class="main"><div class="t">${m.n}</div><div class="s">${esc(its.map(itemLabel).join(', '))}</div></div><div class="num"><b>${fmt(mt.kcal,'kcal')}</b><span class="muted">${fmt(mt.p,'g')} g</span></div><span class="chev ${open ? 'up' : ''}">${ic('right',16)}</span></button>${open ? `<div class="mealitems">${its.map(it => { const v = itemVec(it); return `<div class="li"><div class="main"><div class="t">${esc(itemLabel(it))}</div><div class="s">${new Date(it.t || Date.now()).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}</div></div><div class="num"><b>${fmt(v.kcal,'kcal')}</b><span class="muted">${fmt(v.p,'g')} g</span></div><button class="iconbtn" data-act="edititem" data-id="${it.id}" aria-label="Edit ${esc(itemLabel(it))}">${ic('right',18)}</button></div>`; }).join('')}<a href="#log" data-act="logmeal" data-id="${m.id}" class="small" style="font-weight:600;display:block;padding:8px 0">+ Add to ${m.n.toLowerCase()}</a></div>` : ''}`; }).join('')}
-    ${drinks.length ? (() => { const open = S.openMeal === 'drinks'; const kc = sum(drinks.map(dr => drinkVec(dr).kcal || 0)); return `<button class="mealrow" data-act="openmeal" data-id="drinks" aria-expanded="${open}"><div class="main"><div class="t">Drinks</div><div class="s">${esc(drinks.map(drinkLabel).join(', '))}</div></div><div class="num"><b>${fmt(kc,'kcal')}</b><span class="muted">${stdDrinks(d).toFixed(1)} std</span></div><span class="chev ${open ? 'up' : ''}">${ic('right',16)}</span></button>${open ? `<div class="mealitems">${drinks.map(dr => { const v = drinkVec(dr); return `<div class="li"><div class="main"><div class="t">${esc(drinkLabel(dr))}</div><div class="s">${(stdDrinks({ci:{drinks:[dr]}})).toFixed(1)} standard drinks</div></div><div class="num"><b>${fmt(v.kcal,'kcal')}</b></div><a class="iconbtn" href="#checkin" aria-label="Edit drinks in check-in">${ic('right',18)}</a></div>`; }).join('')}</div>` : ''}`; })() : ''}</div><div class="muted small">Tap a meal to see what's in it.</div>`;
+    ${drinks.length ? (() => { const open = S.openMeal === 'drinks'; const kc = sum(drinks.map(dr => drinkVec(dr).kcal || 0)); return `<button class="mealrow" data-act="openmeal" data-id="drinks" aria-expanded="${open}"><div class="main"><div class="t">Drinks</div><div class="s">${esc(drinks.map(drinkLabel).join(', '))}</div></div><div class="num"><b>${fmt(kc,'kcal')}</b><span class="muted">${stdDrinks(d) ? stdDrinks(d).toFixed(1) + ' std' : Math.round(sum(drinks.map(dr => drinkVec(dr).caf || 0))) + ' mg caf.'}</span></div><span class="chev ${open ? 'up' : ''}">${ic('right',16)}</span></button>${open ? `<div class="mealitems">${drinks.map(dr => { const v = drinkVec(dr); return `<div class="li"><div class="main"><div class="t">${esc(drinkLabel(dr))}</div><div class="s">${dr.k === 'caf' ? Math.round(v.caf || 0) + ' mg caffeine' : (stdDrinks({ci:{drinks:[dr]}})).toFixed(1) + ' standard drinks'}${dr.t ? ' · ' + tlabel(dr.t) : ''}</div></div><div class="num"><b>${fmt(v.kcal,'kcal')}</b></div><a class="iconbtn" href="#checkin" aria-label="Edit drinks in check-in">${ic('right',18)}</a></div>`; }).join('')}</div>` : ''}`; })() : ''}</div><div class="muted small">Tap a meal to see what's in it.</div>`;
   h += `</div>`;
   const wt = waterTarget(), w = d.water || 0;
   h += `<div class="card"><div class="row"><h2>Water</h2><span class="big">${(w/1000).toFixed(2).replace(/\.?0+$/, '')} <small>/ ${(wt/1000).toFixed(2).replace(/\.?0+$/, '')} L</small></span></div><div class="bar"><div style="width:${Math.min(100, w/wt*100)}%;background:var(--water)"></div></div>
@@ -335,6 +369,7 @@ function viewLog() {
   const cart = S.cart; const cartKeys = Object.keys(cart).filter(id => cart[id].q > 0);
   h += `<div class="grid"><button class="card span2" data-act="stdday" style="background:var(--acc);color:#1C1410;border:none;text-align:left;cursor:pointer"><b style="font-size:16px">Apply standard day</b><span style="font-size:13px">Adds omelette (3 eggs), 4 ghee-toast slices, Cosmix, sattu, curd, 2 bananas, 5 tacos. Edit or remove anything after.</span></button>`;
   const curMeal = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast');
+  h += `<button class="card span2 drinkbtn" data-act="logdrink"><b>Coffee, tea, energy drinks</b><span class="small muted">Logs caffeine with the time, for your energy score. Alcohol is in Check-in.</span></button>`;
   h += `<div class="card span2"><h2>Adding to</h2><div class="btns c3">${MEALS.map(m => `<button class="btn ${m.id === curMeal ? 'on' : ''}" data-act="meal" data-id="${m.id}" style="padding:0 6px;font-size:13px">${m.n}</button>`).join('')}</div></div>`;
   const logged = {}; (day(S.date).items || []).forEach(it => { logged[it.f] = (logged[it.f] || 0) + it.q; });
   h += `<div class="card span2"><h2>Your foods</h2><div class="muted small">Numbers start from what you've already logged ${S.date === todayKey() ? 'today' : 'that day'}; + adds more. Tap a number to type halves (0.5, 1.5…); curd and big pizza go in quarters (0.25).</div><div class="list">`;
@@ -365,7 +400,7 @@ function viewCheckin() {
   h += `<div class="card"><div class="row"><div><h2>Bong hits</h2><div class="muted small">${hitsNote(k)}</div></div>${stepper('cistep', 'hits', ci.hits ?? '—')}</div></div>`;
   h += `<div class="card"><div class="row"><h2>Cigarettes</h2>${stepper('cistep', 'cigs', ci.cigs ?? '—')}</div></div>`;
   const drinks = ci.drinks || [];
-  h += `<div class="card"><div class="row"><h2>Drinks</h2><button class="pill" data-act="adddrink">+ Add drink</button></div>${drinks.length ? `<div class="list">${drinks.map(dr => { const v = drinkVec(dr); return `<div class="li"><div class="main"><div class="t">${esc(drinkLabel(dr))}</div><div class="s">${fmt(v.kcal,'kcal')} kcal · ${(stdDrinks({ci:{drinks:[dr]}})).toFixed(1)} standard drinks</div></div><button class="iconbtn" data-act="deldrink" data-id="${dr.id}" aria-label="Remove drink">${ic('x',18)}</button></div>`; }).join('')}</div><div class="muted small">Total ${stdDrinks(d).toFixed(1)} standard drinks (10 g alcohol each). Calories count toward your day.</div>` : `<div class="muted small">None logged. ${ci.drinks ? '' : '<button class="btn" data-act="nodrinks" style="height:36px;margin-left:6px">Log “none today”</button>'}</div>`}</div>`;
+  h += `<div class="card"><div class="row"><h2>Drinks</h2><button class="pill" data-act="adddrink">+ Add drink</button></div>${drinks.length ? `<div class="list">${drinks.map(dr => { const v = drinkVec(dr); return `<div class="li"><div class="main"><div class="t">${esc(drinkLabel(dr))}</div><div class="s">${fmt(v.kcal,'kcal')} kcal · ${dr.k === 'caf' ? Math.round(v.caf || 0) + ' mg caffeine' : (stdDrinks({ci:{drinks:[dr]}})).toFixed(1) + ' standard drinks'}${dr.t ? ' · ' + tlabel(dr.t) : ''}</div></div><button class="iconbtn" data-act="deldrink" data-id="${dr.id}" aria-label="Remove drink">${ic('x',18)}</button></div>`; }).join('')}</div><div class="muted small">Total ${stdDrinks(d).toFixed(1)} standard drinks (10 g alcohol each). Calories count toward your day.</div>` : `<div class="muted small">None logged. ${ci.drinks ? '' : '<button class="btn" data-act="nodrinks" style="height:36px;margin-left:6px">Log “none today”</button>'}</div>`}</div>`;
   h += `</div>`;
   return h;
 }
@@ -387,9 +422,9 @@ function viewNutrients() {
   h += `<div class="grid">`;
   const ps = c.processed;
   h += `<div class="card span2"><div class="row"><div><h2>Processed-food share</h2><div class="muted small">% of calories from ultra-processed items (NOVA 4)</div></div><span class="big">${ps == null ? '—' : Math.round(ps) + '%'}</span></div>${ps != null ? `<div class="bar"><div style="width:${ps}%;background:var(--acc2)"></div></div>` : ''}<div class="muted small">Ultra-processed in your foods: cheese cubes, cheese spread, the three sauces, protein bread, Health Factory base, Cosmix; plus spirits, cola, 7Up and cranberry juice.</div></div>`;
-  const groups = [['macro','Macros'],['mineral','Minerals'],['vitamin','Vitamins & others'],['other','Alcohol']];
+  const groups = [['macro','Macros'],['mineral','Minerals'],['vitamin','Vitamins & others'],['stim','Caffeine & taurine'],['other','Alcohol']];
   groups.forEach(([g, title]) => {
-    const ns = NUTRIENTS.filter(n => n.g === g); if (g === 'other' && !(c.tot.alc > 0)) return;
+    const ns = NUTRIENTS.filter(n => n.g === g); if (g === 'other' && !(c.tot.alc > 0)) return; if (g === 'stim' && !(c.tot.caf > 0)) return;
     h += `<div class="card ${g === 'macro' ? '' : ''}"><h2>${title}</h2><div>`;
     ns.forEach(n => {
       const v = c.tot[n.k] || 0; const t = T(n.k); const st = status(n.k, v); const open = S.open === n.k;
@@ -436,6 +471,7 @@ function viewTrends() {
   h += `<div class="card"><div class="row"><h2>Sleep</h2><span class="big">${sv.length ? mean(sv).toFixed(1) + ' h' : '—'} ${sv.length && mean(sv) < 7 ? '<span class="chip close">LOW</span>' : ''}</span></div>${sv.length ? bars(ss, {line: 7, min: 9, label: 'Hours slept'}) : '<div class="muted small">Nothing logged.</div>'}<div class="muted small">${sv.length} nights logged · target 7–8 h</div></div>`;
   const pp = keys.map(k => { const d = S.days[k]; if (!d || !(d.items || []).length) return {v: null, l: lab(k)}; return {v: dayCalc(d).processed, l: lab(k), c: 'var(--acc2)'}; }); const pv = pp.filter(x => x.v != null).map(x => x.v);
   h += `<div class="card"><div class="row"><h2>Processed-food share</h2><span class="big">${pv.length ? Math.round(mean(pv)) + '%' : '—'} <small>of calories</small></span></div>${pv.length ? bars(pp, {min: 100, label: 'Ultra-processed share of calories'}) : ''}</div>`;
+  h += energyCompareCard();
   // insights
   const ins = insights(); const shown = ins.filter(x => x.show);
   h += `<div class="card span2"><h2>Insights</h2>${shown.length ? shown.map(x => { const I = x.I; const dd = x.diff; const amt = I.yu === 'h' ? Math.abs(dd).toFixed(1) + ' h' : Math.round(Math.abs(dd)) + ' kcal'; const cond = I.bin ? `On days you drank` : `On days with more than ${x.cut % 1 ? x.cut.toFixed(1) : x.cut} ${I.x.toLowerCase()}`; const dir = I.yu === 'h' ? (dd < 0 ? 'less' : 'more') : (dd < 0 ? 'less' : 'more'); return `<div class="flag info"><div>${cond}, ${I.verb} <strong>${amt} ${dir}</strong> ${I.after}. <span class="muted">(${x.n} days, r = ${x.r.toFixed(2)})</span></div></div>`; }).join('') : '<div class="muted small">No strong patterns yet.</div>'}
@@ -461,6 +497,98 @@ function viewSupps() {
   // profiles
   h += `<div class="card span2"><h2>What each tablet adds</h2><div class="list">${SUPPS.map(s => `<div class="li"><div class="main"><div class="t">${esc(s.name)}${s.est ? ' <span class="chip close">estimated</span>' : ''}</div><div class="s">${Object.entries(s.v).map(([nk, v]) => `${NMAP[nk]?.n || nk} ${fmt(v, NMAP[nk]?.u)} ${NMAP[nk]?.u || ''}`).join(' · ')}</div></div></div>`).join('')}</div></div>`;
   return h + '</div>';
+}
+
+// ================= energy UI =================
+const BCOL = {g:'var(--ok)', y:'var(--acc)', r:'var(--over)'};
+const WORDS = {sq:['Terrible','Poor','Okay','Good','Great'], mood:['Low','Irritable','Okay','Good','Great'], feel:['Drained','Heavy','Okay','Light','Energetic']};
+const hhmm = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const tlabel = ms => new Date(ms).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+function morningCard(k) {
+  const d = day(k), y = S.days[addDays(k, -1)]; const p = PROF() || {};
+  const m = S.mc || (S.mc = {bed: p.bed || '01:00', wake: Date.now() >= atClock(k, p.wake || '09:00', false) ? (p.wake || '09:00') : hhmm(Date.now()), sq: null, mood: null, feel: null, yr: null, lc: null});
+  const row = (f, label, words) => `<div class="fl">${label}<div class="seg5">${words.map((w, i) => `<button class="${m[f] === i ? 'on' : ''}" data-act="mcset" data-f="${f}" data-v="${i}">${w}</button>`).join('')}</div></div>`;
+  const hasY = y && hasData(y);
+  const sl = (() => { const b = bedMs(k, m.bed), w = atClock(k, m.wake, false); return (w - b) / 3600e3; })();
+  return `<div class="card span2 mcard"><div class="row"><h2>${new Date().getHours() < 14 ? 'Good morning' : 'Morning check-in'}${p.name ? ', ' + esc(p.name) : ''}</h2><a href="#" class="small muted" data-act="mcskip">Skip today</a></div>
+    <div class="g2"><label class="fl">Went to sleep<input class="field" type="time" value="${m.bed}" data-mc="bed"></label><label class="fl">Woke up<input class="field" type="time" value="${m.wake}" data-mc="wake"></label></div>
+    <div class="muted small" id="mcsl">${sl > 0 && sl < 16 ? `${sl.toFixed(1)} h of sleep` : 'Check the times'}</div>
+    ${row('sq', 'How did you sleep?', WORDS.sq)}${row('mood', 'Mood right now', WORDS.mood)}${row('feel', 'How does your body feel?', WORDS.feel)}
+    ${hasY ? `${row('yr', 'Yesterday, how was your energy really?', ['Awful','Low','Okay','Good','Great'])}<div class="fl">Was yesterday's food log complete?<div class="btns c2"><button class="btn ${m.lc === true ? 'on' : ''}" data-act="mcset" data-f="lc" data-v="1">Yes, all logged</button><button class="btn ${m.lc === false ? 'on' : ''}" data-act="mcset" data-f="lc" data-v="0">No, missed some</button></div></div>` : ''}
+    <button class="btn primary" data-act="mcsave" ${m.sq == null || m.mood == null || m.feel == null ? 'disabled style="opacity:.5"' : ''}>Save</button></div>`;
+}
+function saveMorning(k) {
+  const m = S.mc; const d = day(k); d.ci = d.ci || {};
+  const b = bedMs(k, m.bed), w = atClock(k, m.wake, false); const sl = Math.round((w - b) / 3600e3 * 4) / 4;
+  d.ci.mc = {bed: m.bed, wake: m.wake, sq: m.sq, mood: m.mood, feel: m.feel, t: Date.now()};
+  if (sl > 0 && sl < 16) d.ci.sl = sl;
+  const yk = addDays(k, -1), y = S.days[yk];
+  if (y && hasData(y)) {
+    y.ci = y.ci || {}; if (m.yr != null) y.ci.eRep = m.yr + 1; if (m.lc != null) y.ci.lc = m.lc;
+    try { const e = energyFor(yk, endOfDayMs(yk)); y.ci.ePred = Math.round(mean(e.pts.map(p => p.score))); } catch (er) {}
+    y.u = Date.now(); dirty[yk] = true;
+  }
+  S.mc = null; touch(k);
+}
+function energyCurve(e, now) {
+  const W = 340, H = 120, pts = e.pts; if (pts.length < 2) return '';
+  const t0 = pts[0].t, t1 = pts[pts.length-1].t; const X = t => 6 + (t - t0) / (t1 - t0) * (W - 12), Y = v => 6 + (100 - v) / 100 * (H - 12);
+  const past = pts.filter(p => p.t <= now), fut = pts.filter(p => p.t >= now - 6e5);
+  const path = ps => ps.map((p, i) => (i ? 'L' : 'M') + X(p.t).toFixed(1) + ' ' + Y(p.score).toFixed(1)).join(' ');
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="Energy through the day">`;
+  [[70,'var(--ok)'],[45,'var(--over)']].forEach(([v, c]) => s += `<line x1="0" x2="${W}" y1="${Y(v)}" y2="${Y(v)}" stroke="${c}" stroke-opacity=".35" stroke-dasharray="3 4"/>`);
+  if (past.length > 1) s += `<path d="${path(past)}" fill="none" stroke="var(--acc)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+  if (fut.length > 1) s += `<path d="${path(fut)}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="4 4"/>`;
+  const evt = (t, c, r) => t >= t0 && t <= t1 ? `<circle cx="${X(t).toFixed(1)}" cy="${H + 8}" r="${r}" fill="${c}"/>` : '';
+  e.inp.intakes.filter(x => x.kcal >= 100 && !x.alc).forEach(x => s += evt(x.t, 'var(--acc2)', 3.5));
+  e.inp.caffeine.forEach(x => s += evt(x.t, 'var(--water)', 3.5));
+  e.inp.hits.forEach(x => s += evt(x, 'var(--muted)', 2.2));
+  e.inp.intakes.filter(x => x.alc).forEach(x => s += evt(x.t, 'var(--over)', 3.5));
+  if (now >= t0 && now <= t1) { const c = e.cur; s += `<line x1="${X(now)}" x2="${X(now)}" y1="0" y2="${H}" stroke="var(--text)" stroke-opacity=".25"/><circle cx="${X(now)}" cy="${Y(c.score)}" r="5" fill="${BCOL[band(c.score).c]}" stroke="var(--card)" stroke-width="2"/>`; }
+  return s + '</svg>';
+}
+function energyCard(k) {
+  const isToday = k === todayKey(); const now = isToday ? Date.now() : endOfDayMs(k);
+  const e = energyFor(k, now); const c = e.cur, b = band(c.score);
+  const top = [...c.parts].sort((x, y) => Math.abs(y.v) - Math.abs(x.v)).filter(x => Math.abs(x.v) >= 1.5).slice(0, 4);
+  const ph = e.phases.filter(x => x.v);
+  let h = `<div class="card span2 ecard"><div class="row"><div><h2>Energy</h2><div class="muted small">${isToday ? `now · ${tlabel(Date.now())}` : 'end of day'}${e.inp.real ? '' : ' · estimated, no morning check-in'}</div></div><button class="escore" data-act="energyinfo" style="--bc:${BCOL[b.c]}" aria-label="Energy ${c.score}, ${b.n}. Open breakdown"><b>${c.score}</b><span>${b.n}</span></button></div>
+    ${energyCurve(e, now)}<div class="elegend small muted"><span><i style="background:var(--acc2)"></i>food</span><span><i style="background:var(--water)"></i>caffeine</span><span><i style="background:var(--muted)"></i>hits</span><span><i style="background:var(--over)"></i>alcohol</span><span>dashed = forecast if nothing changes</span></div>
+    <div class="phases">${ph.map(x => { const bb = band(x.v.score); return `<div class="ph ${x.v.now ? 'now' : ''}"><div class="l">${x.n}</div><div class="v" style="color:${BCOL[bb.c]}">${x.v.score}</div><div class="s">${x.v.past ? bb.n : x.v.now ? 'now · ' + bb.n.toLowerCase() : 'forecast'}</div></div>`; }).join('')}</div>
+    <div class="why">${top.map(x => `<div class="row small"><span>${esc(x.label)}</span><b style="color:${x.v > 0 ? 'var(--ok)' : 'var(--over)'}">${x.v > 0 ? '+' : '−'}${Math.abs(x.v).toFixed(0)}</b></div>`).join('')}</div>
+    ${isToday && e.help.length ? `<div class="help">${e.help.map(x => `<div class="flag info"><div><strong>${esc(x.label)}</strong> → about +${x.gain} within 90 min</div></div>`).join('')}</div>` : ''}
+    <a href="#" class="small" data-act="energyinfo" style="font-weight:600">Full breakdown and how it works</a></div>`;
+  return h;
+}
+const LAYERS = [['sleep','Sleep'],['report','Your morning report'],['clock','Body clock'],['fuel','Food'],['water','Water'],['caffeine','Caffeine'],['alcohol','Alcohol'],['cannabis','Cannabis']];
+function energySheet() {
+  const k = S.date, isToday = k === todayKey(); const e = energyFor(k, isToday ? Date.now() : endOfDayMs(k)); const c = e.cur;
+  const groups = LAYERS.map(([id, n]) => { const xs = c.parts.filter(p => p.layer === id); if (!xs.length) return ''; const tot = sum(xs.map(x => x.v));
+    return `<div class="eg"><div class="row"><b>${n}</b><b style="color:${tot >= 0 ? 'var(--ok)' : 'var(--over)'}">${tot >= 0 ? '+' : '−'}${Math.abs(tot).toFixed(1)}</b></div>${xs.map(x => `<div class="row small"><span class="muted">${esc(x.label)}</span><span>${x.v >= 0 ? '+' : '−'}${Math.abs(x.v).toFixed(1)}</span></div>`).join('')}</div>`; }).join('');
+  return `<div class="sheetbg" data-act="closesheet"><div class="sheet tall" role="dialog" aria-label="Energy breakdown" data-stop="1"><div class="row"><h3>Energy ${c.score} · ${band(c.score).n}</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>
+    <div class="row small"><span class="muted">Starting point</span><b>75</b></div>${groups}<div class="row"><b>Total</b><b>${c.score}</b></div>
+    <details><summary class="small" style="font-weight:600">How this works</summary><div class="small muted howto">
+    <p>Fixed rules, no AI. Every 10 minutes from your wake time, the app adds up eight layers on top of 75 and keeps the result between 5 and 98. 70+ is green, 45–69 yellow, under 45 red.</p>
+    <p><b>Sleep:</b> hours slept on a sliding scale (7.5–9 h best, every half hour less costs more, and the cost grows as the day goes on); debt from the 3 nights before; how far your sleep midpoint moved from your usual; going to bed after 3 AM.</p>
+    <p><b>Morning report:</b> your three words. Body feel fades fastest (to 40% by 6 h awake), mood and sleep quality stay longer.</p>
+    <p><b>Body clock:</b> grogginess for 30–60 min after waking (longer after short sleep), a peak ~3 h after waking, a dip ~7 h after waking, a second wind ~11 h, then wind-down after 13 h awake (faster with sleep debt).</p>
+    <p><b>Food:</b> hours since you last ate (3 h free, then it costs more each hour); each sitting gives a sugar lift for ~90 min and, if it was sugary with little protein, fat or fibre, a crash 1.5–3 h later; big meals cause a food coma (bigger and longer if fatty, smaller if high-protein, worse if it lands on your afternoon dip); protein and fibre give steady fuel for 4 h; and how much you've eaten vs what's expected by this hour.</p>
+    <p><b>Water:</b> how much vs what's expected by this hour.</p>
+    <p><b>Caffeine:</b> a blood-level model: absorbs in ~45–60 min, halves every 5 h. The lift grows with the level but flattens (the third coffee adds less than the first). After a big dose, a small dip as it wears off.</p>
+    <p><b>Alcohol:</b> 1–2 drinks give a short lift, then every standard drink sedates for ~4 h. Last night's drinks cost you in the morning and fade by evening.</p>
+    <p><b>Cannabis:</b> each session (hits within 30 min) gives a lift peaking at 15 min and gone by 45, then a couch phase from 40 min to 3.5 h. Bigger sessions hit harder but with diminishing returns. Your 7-day average is your tolerance: the more you smoke daily, the smaller both effects. Past 6 hits a day adds fog; hits after 9 PM cost you the next morning.</p>
+    <p><b>Not counted:</b> cigarettes (your call), training (no time recorded), stress and illness. Tell the app how yesterday really felt each morning, and the monthly review adjusts these numbers to you.</p></div></details></div></div>`;
+}
+function energyCompareCard() {
+  const ks = allKeys().filter(k => S.days[k]?.ci?.eRep && S.days[k]?.ci?.ePred).slice(-30);
+  if (!ks.length) return `<div class="card span2"><h2>Energy: predicted vs felt</h2><div class="muted small">Each morning you rate yesterday's energy. Your ratings and the app's predictions show up here side by side.</div></div>`;
+  const rows = ks.map(k => { const d = S.days[k].ci; const pb = ratingBand(d.ePred); return {k, rep: d.eRep, pred: d.ePred, pb, diff: pb - d.eRep}; });
+  const exact = rows.filter(r => r.diff === 0).length, close = rows.filter(r => Math.abs(r.diff) <= 1).length;
+  const bias = mean(rows.map(r => r.diff));
+  const words = ['','Awful','Low','Okay','Good','Great'];
+  return `<div class="card span2"><div class="row"><h2>Energy: predicted vs felt</h2><span class="small muted">${rows.length} days</span></div>
+    ${rows.length >= 7 ? `<div class="tiles t3"><div class="tile"><div class="l">Exact match</div><div class="v">${Math.round(exact / rows.length * 100)}%</div></div><div class="tile"><div class="l">Within one step</div><div class="v">${Math.round(close / rows.length * 100)}%</div></div><div class="tile"><div class="l">The app tends to</div><div class="v" style="font-size:15px">${Math.abs(bias) < 0.3 ? 'be about right' : bias > 0 ? 'overrate you' : 'underrate you'}</div></div></div>` : `<div class="muted small">Accuracy shows after 7 rated days (${rows.length} so far).</div>`}
+    <div class="list">${rows.slice(-7).reverse().map(r => `<div class="li"><div class="main"><div class="t">${shortDate(r.k)}</div><div class="s">app ${r.pred} (${words[r.pb].toLowerCase()}) · you said ${words[r.rep].toLowerCase()}</div></div><span class="chip ${r.diff === 0 ? 'ok' : Math.abs(r.diff) === 1 ? 'close' : 'over'}">${r.diff === 0 ? 'match' : (r.diff > 0 ? '+' : '') + r.diff}</span></div>`).join('')}</div></div>`;
 }
 
 // ================= profile: setup + Me =================
@@ -570,22 +698,38 @@ function sheetHTML() {
     const f = FMAP[it.f]; const v = itemVec(it);
     return `<div class="sheetbg" data-act="closesheet"><div class="sheet" role="dialog" aria-label="Edit item" data-stop="1"><div class="row"><h3>${esc(f.name)}</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>
       <div class="row"><span>Quantity</span><div class="stepper"><button data-act="itemq" data-id="${it.id}" data-n="-1" aria-label="Fewer">−</button><input class="qn" type="number" inputmode="decimal" step="${stepOf(it.f)}" min="${stepOf(it.f)}" value="${it.q}" data-act="itemqset" data-id="${it.id}" aria-label="Quantity, tap to type"><button data-act="itemq" data-id="${it.id}" data-n="1" aria-label="More">+</button></div></div><div class="small muted" style="margin-top:-4px">Tap the number to type an amount, e.g. ${stepOf(it.f) === 0.25 ? '0.25 = ¼' : '0.5 = ½'}</div>${f.param ? `<div class="row"><span>${f.param.label}</span>${stepper('itemp', it.id, it.o?.[f.param.key] ?? f.param.def)}</div>` : ''}
+      <div class="row"><span>Time</span><input class="field" style="width:150px" type="time" value="${hhmm(it.t || Date.now())}" data-act="itemtime" data-id="${it.id}" aria-label="Time eaten"></div>
       <div class="btns c3">${MEALS.map(m => `<button class="btn ${m.id === mealOf(it) ? 'on' : ''}" data-act="itemmeal" data-id="${m.id}" data-item="${it.id}" style="padding:0 6px;font-size:13px">${m.n}</button>`).join('')}</div>
       <div class="muted small">${fmt(v.kcal,'kcal')} kcal · ${fmt(v.p,'g')} g protein · ${fmt(v.f,'g')} g fat</div><button class="btn danger" data-act="delitem" data-id="${it.id}">Remove</button></div></div>`;
   }
   if (sh.type === 'drink') {
-    const dd = DMAP[sh.d]; const ml = sh.ml; const mx = sh.m || 'none';
-    const v = drinkVec({d: sh.d, ml, m: mx, mml: sh.mml || 0});
-    return `<div class="sheetbg" data-act="closesheet"><div class="sheet" role="dialog" aria-label="Add drink" data-stop="1"><div class="row"><h3>Add drink</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>
-      <div class="btns c4">${DRINKS.map(x => `<button class="btn ${x.id === sh.d ? 'on' : ''}" data-act="dpick" data-id="${x.id}" style="padding:0 6px;font-size:13px">${x.name}</button>`).join('')}</div>
+    const cat = sh.cat || 'alc';
+    const segs = [['alc','Alcohol'],['coffee','Coffee'],['tea','Tea'],['energy','Energy']].map(([id, n]) => `<button class="${cat === id ? 'on' : ''}" data-act="dcat" data-id="${id}">${n}</button>`).join('');
+    const timeRow = `<div class="row"><span style="font-weight:600">Time</span><input class="field" style="width:150px" type="time" value="${sh.time || hhmm(Date.now())}" data-act="dtime" aria-label="Time"></div>`;
+    let body;
+    if (cat === 'alc') {
+      const dd = DMAP[sh.d]; const ml = sh.ml; const mx = sh.m || 'none'; const v = drinkVec({d: sh.d, ml, m: mx, mml: sh.mml || 0});
+      body = `<div class="btns c4">${DRINKS.map(x => `<button class="btn ${x.id === sh.d ? 'on' : ''}" data-act="dpick" data-id="${x.id}" style="padding:0 6px;font-size:13px">${x.name}</button>`).join('')}</div>
       <div class="muted small">${dd.name} · ${dd.sub}</div>
       <div class="row"><span style="font-weight:600">Amount</span><span style="display:flex;align-items:center;gap:6px"><input class="num" type="number" inputmode="numeric" min="0" max="3000" value="${ml}" data-act="dml" aria-label="Drink amount in ml"><span class="muted">ml</span></span></div>
       <div class="btns c3">${dd.presets.map(p => `<button class="btn ${p === ml ? 'on' : ''}" data-act="dpre" data-n="${p}">${p} ml</button>`).join('')}</div>
       <div style="font-weight:600">Mixer</div><div class="btns c4">${MIXERS.map(m => `<button class="btn ${m.id === mx ? 'on' : ''}" data-act="mpick" data-id="${m.id}" style="padding:0 6px;font-size:13px">${m.name}</button>`).join('')}</div>
       ${mx !== 'none' ? `<div class="row"><span>Mixer amount</span><span style="display:flex;align-items:center;gap:6px"><input class="num" type="number" inputmode="numeric" min="0" max="2000" value="${sh.mml || 0}" data-act="mml" aria-label="Mixer amount in ml"><span class="muted">ml</span></span></div><div class="btns c3">${[100,150,200].map(p => `<button class="btn ${p === sh.mml ? 'on' : ''}" data-act="mpre" data-n="${p}">${p} ml</button>`).join('')}</div>` : ''}
-      <div class="muted small">${fmt(v.kcal,'kcal')} kcal · ${((v.alc || 0) / 10).toFixed(1)} standard drinks</div>
+      ${timeRow}<div class="muted small">${fmt(v.kcal,'kcal')} kcal · ${((v.alc || 0) / 10).toFixed(1)} standard drinks</div>`;
+    } else {
+      const cc = CMAP[sh.d]; const dr = {k: 'caf', d: sh.d, shots: sh.shots, sugar: sh.sugar, size: sh.size}; const v = drinkVec(dr);
+      body = `<div class="btns c3">${CAFF.filter(x => x.cat === cat).map(x => `<button class="btn ${x.id === sh.d ? 'on' : ''}" data-act="cpick" data-id="${x.id}" style="padding:0 6px;font-size:13px">${x.name}</button>`).join('')}</div>
+      <div class="muted small">${esc(cc.sub)}</div>
+      ${cc.shots ? `<div class="row"><span style="font-weight:600">Espresso shots</span>${stepper('cshots', cc.id, sh.shots || cc.shots)}</div>` : ''}
+      ${cc.sizes && cc.sizes.length > 1 ? `<div class="btns c${cc.sizes.length}">${cc.sizes.map(z => `<button class="btn ${z === sh.size ? 'on' : ''}" data-act="csize" data-n="${z}">${z} ml</button>`).join('')}</div>` : ''}
+      ${cc.nosugar ? '' : `<div class="row"><span style="font-weight:600">Sugar <span class="muted small" style="font-weight:400">teaspoons</span></span>${stepper('csugar', cc.id, sh.sugar || 0)}</div>`}
+      ${timeRow}<div class="muted small">${fmt(v.kcal,'kcal')} kcal · <b>${Math.round(v.caf || 0)} mg caffeine</b>${v.tau ? ` · ${Math.round(v.tau)} mg taurine` : ''}${v.sug ? ` · ${fmt(v.sug,'g')} g sugar` : ''}</div>`;
+    }
+    return `<div class="sheetbg" data-act="closesheet"><div class="sheet tall" role="dialog" aria-label="Add drink" data-stop="1"><div class="row"><h3>Add drink</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>
+      <div class="seg" style="grid-template-columns:repeat(4,1fr)">${segs}</div>${body}
       <button class="btn primary" data-act="savedrink">Add to ${S.date === todayKey() ? 'today' : shortDate(S.date)}</button></div></div>`;
   }
+  if (sh.type === 'energy') return energySheet();
   if (sh.type === 'account') {
     return `<div class="sheetbg" data-act="closesheet"><div class="sheet" role="dialog" aria-label="Account" data-stop="1"><div class="row"><h3>Account</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>
       <div><div class="muted small">Signed in as</div><div style="font-weight:600">${esc(S.user?.email)}</div></div>
@@ -690,11 +834,11 @@ document.addEventListener('click', e => {
   switch (act) {
     case 'day': { const nk = addDays(S.date, n); if (nk <= todayKey()) { S.date = nk; S.open = null; render(); } break; }
     case 'gotoday': e.preventDefault(); S.date = todayKey(); render(); break;
-    case 'water': d.water = Math.max(0, (d.water || 0) + n); touch(k); break;
+    case 'water': { const before = d.water || 0; d.water = Math.max(0, before + n); if (k === todayKey()) { d.wl = d.wl || []; if (n > 0) d.wl.push({t: Date.now(), ml: n}); else { let r = before - d.water; while (r > 0 && d.wl.length) { const l = d.wl[d.wl.length-1]; if (l.ml <= r) { r -= l.ml; d.wl.pop(); } else { l.ml -= r; r = 0; } } } } touch(k); break; }
     case 'cart': { const c = S.cart[id] || (S.cart[id] = {q: 0, o: {}}); c.q = Math.max(0, c.q + n); if (FMAP[id].param && !c.o[FMAP[id].param.key]) c.o[FMAP[id].param.key] = FMAP[id].param.def; render(); break; }
     case 'param': { const f = FMAP[id]; const c = S.cart[id]; const pk = f.param.key; c.o[pk] = Math.min(f.param.max, Math.max(f.param.min, (c.o[pk] ?? f.param.def) + n)); render(); break; }
     case 'dosa': { const m = el.dataset.m; const c = S.cart.dosa || (S.cart.dosa = {q: 0, o: {}}); if (m === 'n') { S.dosaMode = 'n'; c.q = Math.max(c.q, 1); } else { S.dosaMode = null; c.q = c.q === +m ? 0 : +m; } render(); break; }
-    case 'addcart': { const now = Date.now(); const m = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast'); Object.entries(S.cart).forEach(([fid, c]) => { if (c.q > 0) d.items.push({id: uid(), f: fid, q: c.q, o: FMAP[fid].param ? {[FMAP[fid].param.key]: c.o[FMAP[fid].param.key] ?? FMAP[fid].param.def} : {}, t: now, m}); }); S.cart = {}; S.dosaMode = null; S.meal = null; touch(k); toast('Added'); location.hash = '#today'; break; }
+    case 'addcart': { const m = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast'); const nowMeal = mealByHour(new Date().getHours()); const past = S.date !== todayKey() || MEALS.findIndex(x => x.id === m) < MEALS.findIndex(x => x.id === nowMeal); const now = past ? mealTime(k, m) : Date.now(); if (past) setTimeout(() => toast(`Time set to ${tlabel(now)} — change it by tapping the item`), 1900); Object.entries(S.cart).forEach(([fid, c]) => { if (c.q > 0) d.items.push({id: uid(), f: fid, q: c.q, o: FMAP[fid].param ? {[FMAP[fid].param.key]: c.o[FMAP[fid].param.key] ?? FMAP[fid].param.def} : {}, t: now, m}); }); S.cart = {}; S.dosaMode = null; S.meal = null; touch(k); toast('Added'); location.hash = '#today'; break; }
     case 'stdday': { const now = Date.now(); STANDARD_DAY.forEach(s => d.items.push({id: uid(), f: s.f, q: s.q, o: s.o || {}, t: now, m: STD_MEAL[s.f] || 'breakfast'})); touch(k); toast('Standard day added'); location.hash = '#today'; break; }
     case 'edititem': S.sheet = {type: 'item', id}; render(); break;
     case 'itemq': { const it = d.items.find(x => x.id === id); if (it) { it.q = Math.max(stepOf(it.f), it.q + n); touch(k); } break; }
@@ -704,18 +848,28 @@ document.addEventListener('click', e => {
     case 'pfset': { const f = el.dataset.f; let v = el.dataset.v; if (['trainDays','sessionMin','pace'].includes(f)) v = +v; S.pf[f] = v; if (f === 'goal') S.pf.pace = GMAP[v].paces[0]; render(); break; }
     case 'pfsave': { const err = savePF(); S.pfErr = err; if (err) { render(); break; } S.pf = null; toast('Profile saved'); location.hash = '#me'; break; }
     case 'pflater': e.preventDefault(); S.skipSetup = true; location.hash = '#today'; route(); break;
+    case 'mcset': { const f = el.dataset.f; S.mc[f] = f === 'lc' ? el.dataset.v === '1' : +el.dataset.v; render(); break; }
+    case 'mcsave': saveMorning(k); toast('Morning check-in saved'); break;
+    case 'mcskip': e.preventDefault(); d.ci = d.ci || {}; d.ci.mc = {skipped: true, t: Date.now()}; S.mc = null; touch(k); break;
+    case 'energyinfo': e.preventDefault(); S.sheet = {type: 'energy'}; render(); break;
+    case 'dcat': { const c = el.dataset.id; Object.assign(S.sheet, c === 'alc' ? {cat: c, d: 'beer5', ml: 330, m: 'none', mml: 0} : {cat: c, d: CAFF.find(x => x.cat === c).id, shots: null, sugar: c === 'tea' ? 1 : 0, size: null}); if (c !== 'alc') { const cc = CMAP[S.sheet.d]; S.sheet.shots = cc.shots || null; S.sheet.size = cc.sizes ? cc.sizes[0] : null; } render(); break; }
+    case 'cpick': { const cc = CMAP[id]; S.sheet.d = id; S.sheet.shots = cc.shots || null; S.sheet.size = cc.sizes ? cc.sizes[0] : null; S.sheet.sugar = id === 'chai' ? 1 : 0; render(); break; }
+    case 'cshots': S.sheet.shots = Math.min(4, Math.max(1, (S.sheet.shots || 1) + n)); render(); break;
+    case 'csugar': S.sheet.sugar = Math.min(8, Math.max(0, (S.sheet.sugar || 0) + n)); render(); break;
+    case 'csize': S.sheet.size = n; render(); break;
+    case 'logdrink': S.sheet = {type: 'drink', cat: 'coffee', d: 'esp1', shots: null, sugar: 0, size: null, time: S.date === todayKey() ? hhmm(Date.now()) : '17:00'}; render(); break;
     case 'openmeal': S.openMeal = S.openMeal === id ? null : id; render(); break;
     case 'itemmeal': { const it = d.items.find(x => x.id === el.dataset.item); if (it) { it.m = id; touch(k); } break; }
     case 'delitem': d.items = d.items.filter(x => x.id !== id); S.sheet = null; touch(k); toast('Removed'); break;
     case 'closesheet': S.sheet = null; render(); break;
-    case 'cistep': { d.ci = d.ci || {}; const f = id; const step = +(el.dataset.step || 1); const cur = d.ci[f]; d.ci[f] = cur == null ? (f === 'sl' ? 7 : Math.max(0, n)) : Math.min(f === 'sl' ? 16 : 999, Math.max(0, Math.round((cur + n * step) * 10) / 10)); touch(k); break; }
+    case 'cistep': { d.ci = d.ci || {}; const f = id; if (f === 'hits' && k === todayKey()) { d.ci.hitsT = d.ci.hitsT || []; if (n > 0) d.ci.hitsT.push(Date.now()); else if ((d.ci.hits || 0) > 0) d.ci.hitsT.pop(); } const step = +(el.dataset.step || 1); const cur = d.ci[f]; d.ci[f] = cur == null ? (f === 'sl' ? 7 : Math.max(0, n)) : Math.min(f === 'sl' ? 16 : 999, Math.max(0, Math.round((cur + n * step) * 10) / 10)); touch(k); break; }
     case 'trained': d.ci = d.ci || {}; d.ci.tr = el.dataset.v === '1'; touch(k); break;
-    case 'adddrink': S.sheet = {type: 'drink', d: 'beer5', ml: 330, m: 'none', mml: 0}; render(); break;
+    case 'adddrink': S.sheet = {type: 'drink', cat: 'alc', d: 'beer5', ml: 330, m: 'none', mml: 0, time: S.date === todayKey() ? hhmm(Date.now()) : '22:00'}; render(); break;
     case 'dpick': S.sheet.d = id; S.sheet.ml = DMAP[id].presets[0]; if (['beer5','beer8','wine'].includes(id)) { S.sheet.m = 'none'; S.sheet.mml = 0; } render(); break;
     case 'dpre': S.sheet.ml = n; render(); break;
     case 'mpick': S.sheet.m = id; if (id !== 'none' && !S.sheet.mml) S.sheet.mml = 150; render(); break;
     case 'mpre': S.sheet.mml = n; render(); break;
-    case 'savedrink': { const sh = S.sheet; d.ci = d.ci || {}; d.ci.drinks = d.ci.drinks || []; d.ci.drinks.push({id: uid(), d: sh.d, ml: +sh.ml || 0, m: sh.m, mml: sh.m === 'none' ? 0 : (+sh.mml || 0), t: Date.now()}); S.sheet = null; touch(k); toast('Drink added'); break; }
+    case 'savedrink': { const sh = S.sheet; d.ci = d.ci || {}; d.ci.drinks = d.ci.drinks || []; const t = sh.time ? atClock(k, sh.time) : Date.now(); if (sh.cat && sh.cat !== 'alc') d.ci.drinks.push({id: uid(), k: 'caf', d: sh.d, shots: sh.shots || undefined, sugar: sh.sugar || 0, size: sh.size || undefined, t}); else d.ci.drinks.push({id: uid(), d: sh.d, ml: +sh.ml || 0, m: sh.m, mml: sh.m === 'none' ? 0 : (+sh.mml || 0), t}); S.sheet = null; touch(k); toast('Drink added'); break; }
     case 'deldrink': d.ci.drinks = (d.ci.drinks || []).filter(x => x.id !== id); touch(k); break;
     case 'nodrinks': d.ci = d.ci || {}; d.ci.drinks = []; touch(k); break;
     case 'opennut': S.open = S.open === id ? null : id; render(); break;
@@ -733,11 +887,15 @@ document.addEventListener('change', e => {
   if (act === 'ci') { d.ci = d.ci || {}; const v = el.value === '' ? null : +el.value; if (v == null || isNaN(v)) delete d.ci[el.dataset.f]; else d.ci[el.dataset.f] = v; touch(k); }
   if (act === 'cartset') { const id = el.dataset.id, base = +el.dataset.base || 0; const c = S.cart[id] || (S.cart[id] = {q: 0, o: {}}); c.q = Math.max(0, roundStep(el.value, stepOf(id)) - base); if (FMAP[id].param && !c.o[FMAP[id].param.key]) c.o[FMAP[id].param.key] = FMAP[id].param.def; if (id === 'dosa' && c.q) S.dosaMode = 'n'; render(); }
   if (act === 'itemqset') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it) { it.q = Math.max(stepOf(it.f), roundStep(el.value, stepOf(it.f)) || it.q); touch(k); } }
+  if (act === 'itemtime') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it && el.value) { it.t = atClock(k, el.value); touch(k); } }
+  if (act === 'dtime') { S.sheet.time = el.value; }
   if (act === 'dml') { S.sheet.ml = Math.max(0, +el.value || 0); render(); }
   if (act === 'mml') { S.sheet.mml = Math.max(0, +el.value || 0); render(); }
 });
 document.addEventListener('input', e => {
-  const el = e.target; const f = el.dataset?.pf; if (!f || !S.pf) return;
+  const el = e.target;
+  if (el.dataset?.mc && S.mc) { S.mc[el.dataset.mc] = el.value; const sl = (atClock(S.date, S.mc.wake, false) - bedMs(S.date, S.mc.bed)) / 3600e3; const o = document.getElementById('mcsl'); if (o) o.textContent = sl > 0 && sl < 16 ? `${sl.toFixed(1)} h of sleep` : 'Check the times'; return; }
+  const f = el.dataset?.pf; if (!f || !S.pf) return;
   S.pf[f] = el.value; const pv = document.getElementById('pfprev'); if (pv) pv.innerHTML = pfPreview();
   if (f === 'weightKg' || f === 'targetKg') { clearTimeout(S.pfT); S.pfT = setTimeout(() => { const a = document.activeElement?.dataset?.pf; render(); if (a) { const x = document.querySelector(`[data-pf="${a}"]`); if (x) { x.focus(); const L = x.value.length; try { x.setSelectionRange(L, L); } catch (er) {} } } }, 900); }
 });

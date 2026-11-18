@@ -60,3 +60,8 @@ All maths lives in `src/profile.js` as plain functions, separate from the screen
 - **Target:** maintenance + pace × 7,700 ÷ 7 (deficit capped at 25%). Protein g/kg by goal, fat 0.8 g/kg minimum and 30% maximum, carbs are the rest, fibre 14 g per 1,000 kcal, water 35 ml/kg + training.
 - **Frozen weekly:** targets for a Monday–Sunday week use only data from before that Monday.
 - **Body fat:** US Navy tape method (waist + neck, plus hips for women). Shown only if measured in the last 60 days. FFMI = lean kg ÷ m², adjusted to 1.8 m.
+
+## Energy score (v1.4)
+`src/energy.js`: plain functions, fixed rules, no AI. Base 75 plus eight layers, clamped 5–98, computed every 10 minutes from wake to bedtime. Green 70+, yellow 45–69, red under 45.
+Inputs: morning check-in (bed/wake times, sleep quality, mood, body feel), food with times, drinks with times (caffeine model: absorbs in ~45–60 min, half-life 5 h), water taps with times, bong-hit taps with times (tolerance from the 7-day average), last night's drinks and late hits.
+Each morning you rate yesterday (1–5). The app stores its own prediction for yesterday next to it (`ePred` vs `eRep`), and Trends shows how often they match. The numbers get tuned monthly from that comparison.
