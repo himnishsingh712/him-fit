@@ -143,3 +143,6 @@ Trends no longer shows "Energy: predicted vs felt" (it's on Energy). Me drops th
 
 ## v1.12.3 — Moments and timed tags: time + OK, list hidden
 Tapping a Moment or timed tag opens a small panel (time, starting at now, and OK); OK logs it with a ✓ message. The entries no longer show all the time: "Logged today (n) ▾" opens the list for fixing a time or removing one. Entries show as icons on the energy chart.
+
+## v1.12.4 — Compact Me page
+Body now back to 6 tiles (BMR restored). Measurements is one line (last check · Update) that opens the measurement changes and the physique card. Your calories is one line (daily target · Target history ›) that opens the step-by-step maths. Goal and Profile cards removed from Me: both are in Edit.
