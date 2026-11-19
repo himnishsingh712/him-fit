@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.11.0';
+const APP_VERSION = '1.12.0';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -471,11 +471,6 @@ function viewToday() {
     <div><div class="row"><b>Protein</b><span class="big">${fmt(p,'g')} <small>/ ${T('p')} g</small></span></div><div class="bar" style="margin-top:8px"><div style="width:${Math.min(100, p/T('p')*100)}%;background:var(--acc2)"></div></div></div>
     <div class="tiles"><div class="tile"><div class="l">Carbs</div><div class="v">${fmt(tot.c,'g')} g</div></div><div class="tile"><div class="l">Fat</div><div class="v" style="color:${barColor('f', tot.f||0)}">${fmt(tot.f,'g')} g</div></div><div class="tile"><div class="l">Sodium</div><div class="v" style="color:${barColor('na', tot.na||0)}">${fmt(tot.na,'mg')} mg</div></div></div>
     <a href="#nutrients" class="small" style="font-weight:600">All nutrients and vitamins</a></div>`;
-  const items = (d.items || []).slice().sort((a, b) => (a.t||0) - (b.t||0)); const drinks = d.ci?.drinks || [];
-  h += `<div class="card"><h2>Meals</h2><div class="list">${MEALS.map(m => { const its = items.filter(it => mealOf(it) === m.id).sort((a, b) => (a.t || 0) - (b.t || 0)); const mt = {}; its.forEach(it => vecAdd(mt, itemVec(it), 1));
-      return `<div class="mealsec"><div class="row"><div class="t" style="font-weight:700">${m.n}${its.length ? ` <span class="small muted" style="font-weight:400">· ${fmt(mt.kcal,'kcal')} kcal</span>` : ''}</div><a href="#log" class="addbtn" data-act="logmeal" data-id="${m.id}" aria-label="Add to ${m.n.toLowerCase()}">+</a></div>${its.map(it => { const v = itemVec(it); return `<div class="li"><button class="main linkish" data-act="edititem" data-id="${it.id}" aria-label="Edit ${esc(itemLabel(it))}"><div class="t">${esc(itemLabel(it).replace(/ × [\d.½¼¾]+$/, ''))}</div><div class="s">${tlabel(it.t || Date.now())} · ${fmt(v.kcal,'kcal')} kcal · ${fmt(v.p,'g')} g</div></button>${stepper('itemq', it.id, fq(it.q))}</div>`; }).join('')}</div>`; }).join('')}
-    ${drinks.length ? (() => { const open = S.openMeal === 'drinks'; const kc = sum(drinks.map(dr => drinkVec(dr).kcal || 0)); return `<button class="mealrow" data-act="openmeal" data-id="drinks" aria-expanded="${open}"><div class="main"><div class="t">Drinks</div><div class="s">${esc(drinks.map(drinkLabel).join(', '))}</div></div><div class="num"><b>${fmt(kc,'kcal')}</b><span class="muted">${stdDrinks(d) ? stdDrinks(d).toFixed(1) + ' std' : Math.round(sum(drinks.map(dr => drinkVec(dr).caf || 0))) + ' mg caf.'}</span></div><span class="chev ${open ? 'up' : ''}">${ic('right',16)}</span></button>${open ? `<div class="mealitems">${drinks.map(dr => { const v = drinkVec(dr); return `<div class="li"><div class="main"><div class="t">${esc(drinkLabel(dr))}</div><div class="s">${dr.k === 'caf' ? Math.round(v.caf || 0) + ' mg caffeine' : (stdDrinks({ci:{drinks:[dr]}})).toFixed(1) + ' standard drinks'}${dr.t ? ' · ' + tlabel(dr.t) : ''}</div></div><div class="num"><b>${fmt(v.kcal,'kcal')}</b></div><a class="iconbtn" href="#checkin" aria-label="Edit drinks in check-in">${ic('right',18)}</a></div>`; }).join('')}</div>` : ''}`; })() : ''}</div>`;
-  h += `</div>`;
   const wt = waterTarget(), w = d.water || 0;
   h += `<div class="card"><div class="row"><h2>Water</h2><span class="big">${(w/1000).toFixed(2).replace(/\.?0+$/, '')} <small>/ ${(wt/1000).toFixed(2).replace(/\.?0+$/, '')} L</small></span></div><div class="bar"><div style="width:${Math.min(100, w/wt*100)}%;background:var(--water)"></div></div>
     <div class="btns c4"><button class="btn wbtn" data-act="water" data-n="250">+250</button><button class="btn wbtn" data-act="water" data-n="500">+500</button><button class="btn wbtn" data-act="water" data-n="1000">+1 L</button><button class="btn" data-act="water" data-n="-250" aria-label="Remove 250 ml">−250</button></div></div>`;
@@ -486,22 +481,31 @@ function viewToday() {
   h += `<a class="card" href="#checkin" style="text-decoration:none;color:inherit"><div class="row"><h2>Check-in</h2><span class="small" style="font-weight:600;color:var(--acc)">Log sleep, drinks, hits →</span></div><div class="tiles">${tile('Weight', ci.w ? ci.w + ' kg' : '—')}${tile('Sleep', ci.sl != null || napHours(ci) ? ((ci.sl || 0) + napHours(ci)).toFixed(1).replace(/\.0$/, '') + ' h' + (napHours(ci) ? ' · nap' : '') : '—')}${tile('Trained', ci.tr == null ? '—' : ci.tr ? 'Yes' : 'No')}${tile('Bong hits', ci.hits ?? '—')}${tile('Cigarettes', ci.cigs ?? '—')}${tile('Drinks', ci.drinks?.length ? stdDrinks(d).toFixed(1) + ' std' : (ci.drinks ? '0' : '—'))}</div><div class="muted small">Weight, sleep, training, bong hits, cigarettes and drinks — all optional, kept separate from food.</div></a>`;
   return h + '</div>';
 }
+function viewMeals() {
+  const k = S.date, d = day(k); let h = header('Meals'); h += `<div class="grid">`;
+  const items = (d.items || []).slice().sort((a, b) => (a.t || 0) - (b.t || 0));
+  h += `<div class="card span2"><div class="list">${MEALS.map(m => { const its = items.filter(it => mealOf(it) === m.id); const mt = {}; its.forEach(it => vecAdd(mt, itemVec(it), 1));
+      return `<div class="mealsec"><div class="row"><div class="t" style="font-weight:700">${m.n}${its.length ? ` <span class="small muted" style="font-weight:400">· ${fmt(mt.kcal,'kcal')} kcal · ${fmt(mt.p,'g')} g</span>` : ''}</div><a href="#log" class="addbtn" data-act="logmeal" data-id="${m.id}" aria-label="Add to ${m.n.toLowerCase()}">+</a></div>${its.map(it => { const v = itemVec(it); return `<button class="li linkish" style="width:100%" data-act="edititem" data-id="${it.id}" aria-label="Edit ${esc(itemLabel(it))}"><div class="main"><div class="t" style="font-weight:500">${esc(itemLabel(it))}</div></div><div class="small muted">${fmt(v.kcal,'kcal')} kcal · ${fmt(v.p,'g')} g</div></button>`; }).join('')}</div>`; }).join('')}</div>
+    <div class="muted small">Tap a food to change the amount, time or meal, or remove it.</div></div>`;
+  const cdr = (d.ci?.drinks || []).filter(dr => CMAP[dr.d]);
+  if (cdr.length) h += `<div class="card span2"><h2>Coffee, tea &amp; energy drinks</h2><div class="list">${cdr.map(dr => `<div class="li"><div class="main"><div class="t">${esc(drinkLabel(dr))}</div><div class="s">${dr.t ? tlabel(dr.t) : ''}</div></div><button class="iconbtn" data-act="deldrink" data-id="${dr.id}" aria-label="Remove">${ic('x',16)}</button></div>`).join('')}</div></div>`;
+  return h + '</div>';
+}
 // time for food added on the Log screen: what you set, else now (today) or the meal's usual time (past days). The meal never moves it.
-function logTimeFor(k, m) { if (S.logTime) return atClock(k, S.logTime); return k === todayKey() ? Date.now() : mealTime(k, m); }
+function logTimeFor(k, m) { return k === todayKey() ? Date.now() : mealTime(k, m); }
 function viewLog() {
-  let h = header('Log food');
+  const curMealT = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast'); let h = header(`Add to ${MEALN[curMealT].toLowerCase()}`);
   const cart = S.cart; const cartKeys = Object.keys(cart).filter(id => cart[id].q !== 0);
   h += `<div class="grid">`;
   const curMeal = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast');
+  h += `<a href="#meals" class="small muted" style="display:block;margin:0 0 6px">‹ Meals</a>`;
   h += `<button class="card span2 drinkbtn" data-act="logdrink"><b>Coffee, tea, energy drinks</b><span class="small muted">Logs caffeine with the time, for your energy score. Alcohol is in Check-in.</span></button>`;
-  h += `<div class="card span2"><h2>Adding to</h2><div class="btns c3">${MEALS.map(m => `<button class="btn ${m.id === curMeal ? 'on' : ''}" data-act="meal" data-id="${m.id}" style="padding:0 6px;font-size:13px">${m.n}</button>`).join('')}</div>
-    <div class="row" style="margin-top:10px"><span style="font-weight:600">Time eaten</span><input class="field" style="width:150px" type="time" value="${S.logTime || hhmm(logTimeFor(S.date, curMeal))}" data-act="logtime" aria-label="Time eaten"></div><div class="muted small">${S.date === todayKey() ? 'Starts at now. Change it if you ate earlier — the meal you pick doesn\'t change it.' : 'Set to when you ate that day.'}</div></div>`;
-  const logged = {}; (day(S.date).items || []).filter(it => mealOf(it) === curMeal).forEach(it => { logged[it.f] = (logged[it.f] || 0) + it.q; });
+  const logged = {}; // the list always starts from zero: it only adds
   { const yIts = (S.days[addDays(S.date, -1)]?.items || []).filter(it => mealOf(it) === curMeal); if (yIts.length) { const v = {}; yIts.forEach(it => vecAdd(v, itemVec(it), 1)); h += `<button class="card span2 drinkbtn" data-act="repeatmeal" data-id="${curMeal}" style="border-color:var(--acc)"><b>Repeat yesterday's ${MEALN[curMeal].toLowerCase()}</b><span class="small muted">${esc(yIts.map(itemLabel).join(', '))} · ${fmt(v.kcal,'kcal')} kcal · ${fmt(v.p,'g')} g</span></button>`; } }
   const use = {}; rangeKeys(addDays(S.date, -1), 30).forEach(x => (S.days[x]?.items || []).forEach(it => { if (mealOf(it) === curMeal) use[it.f] = (use[it.f] || 0) + 1; }));
   const bySort = xs => xs.map((f, i) => ({f, i})).sort((a, b) => (use[b.f.id] || 0) - (use[a.f.id] || 0) || a.i - b.i).map(x => x.f);
   const FOODS_SORTED = [...bySort(FOODS.filter(f => !f.out)), 'OUT', ...bySort(FOODS.filter(f => f.out))];
-  h += `<div class="card span2"><h2>Your foods</h2><div class="muted small">Sorted by what you usually eat at ${MEALN[curMeal].toLowerCase()}. Numbers show what's already in this meal; + adds, − removes. Nothing changes until you tap Done. Tap a number to type halves (0.5, 1.5…); curd, big pizza, dal makhani and kachori go in quarters (0.25).</div><div class="list">`;
+  h += `<div class="card span2"><h2>Your foods</h2><div class="muted small">Sorted by what you usually eat at ${MEALN[curMeal].toLowerCase()}. Everything starts at 0 — pick what you're adding and tap Done. It's saved at the time you add it; to fix an amount, time or meal, tap the food on the Meals page. Tap a number to type halves (0.5, 1.5…); curd, big pizza, dal makhani and kachori go in quarters (0.25).</div><div class="list">`;
   FOODS_SORTED.forEach(f => {
     if (f === 'OUT') { h += `<div class="li"><div class="main"><div class="t" style="color:var(--acc)">Outside food</div><div class="s">Restaurant and takeaway portions</div></div></div>`; return; }
     const c = cart[f.id] || {q: 0}; const u = foodUnit(f.id, c.o || {});
@@ -1091,10 +1095,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 document.addEventListener('submit', e => { if (e.target.id === 'authform') { e.preventDefault(); onAuthSubmit(e.target); } });
 
 // ================= render & routing =================
-const VIEWS = {energy: viewEnergy, today: viewToday, log: viewLog, checkin: viewCheckin, nutrients: viewNutrients, trends: viewTrends, supplements: viewSupps, me: viewMe, setup: viewSetup};
+const VIEWS = {energy: viewEnergy, today: viewToday, meals: viewMeals, log: viewLog, checkin: viewCheckin, nutrients: viewNutrients, trends: viewTrends, supplements: viewSupps, me: viewMe, setup: viewSetup};
 function nav() {
   const a = (v, icon, label) => `<a href="#${v}" class="${S.view === v ? 'on' : ''}" ${S.view === v ? 'aria-current="page"' : ''}>${ic(icon, 24)}${label}</a>`;
-  return `<nav class="bottom" aria-label="Main">${a('today','home','Today')}${a('nutrients','pie','Nutrients')}<a href="#log" class="fab" aria-label="Log food">${ic('plus', 26, 2.6)}</a>${a('trends','trend','Trends')}${a('me','user','Me')}</nav>`;
+  return `<nav class="bottom" aria-label="Main">${a('today','home','Today')}${a('nutrients','pie','Nutrients')}<a href="#meals" class="fab" aria-label="Meals">${ic('plus', 26, 2.6)}</a>${a('trends','trend','Trends')}${a('me','user','Me')}</nav>`;
 }
 function render() {
   const sy = window.scrollY;
@@ -1102,7 +1106,7 @@ function render() {
   document.getElementById('app').innerHTML = `<main class="wrap">${(VIEWS[S.view] || viewToday)()}</main>${S.view === 'setup' ? '' : nav()}${sheetHTML()}${S.toast ? `<div class="toast" role="status">${esc(S.toast)}</div>` : ''}`;
   window.scrollTo(0, sy);
 }
-function route() { if (!S.user) { render(); return; } if (location.hash !== '#log') { S.meal = null; S.logTime = null; } const v = location.hash.replace('#', ''); S.view = VIEWS[v] ? v : 'today'; if (!PROF() && !S.skipSetup && S.view !== 'setup') { S.view = 'setup'; S.autoSetup = true; startSetup(); } if (S.view === 'setup' && !S.pf) startSetup(); S.open = null; S.openMeal = null; render(); window.scrollTo(0, 0); }
+function route() { if (!S.user) { render(); return; } if (location.hash !== '#log') { S.meal = null; S.logTime = null; S.cart = {}; } const v = location.hash.replace('#', ''); S.view = VIEWS[v] ? v : 'today'; if (!PROF() && !S.skipSetup && S.view !== 'setup') { S.view = 'setup'; S.autoSetup = true; startSetup(); } if (S.view === 'setup' && !S.pf) startSetup(); S.open = null; S.openMeal = null; render(); window.scrollTo(0, 0); }
 let toastT; function toast(m) { S.toast = m; clearTimeout(toastT); toastT = setTimeout(() => { S.toast = null; render(); }, 1800); render(); }
 
 // ================= events =================
@@ -1125,7 +1129,7 @@ document.addEventListener('click', e => {
     case 'evdel': { d.ci.ev = (d.ci?.ev || []).filter(x => x.id !== id); touch(k); break; }
     case 'param': { const f = FMAP[id]; const c = S.cart[id]; const pk = f.param.key; c.o[pk] = Math.min(f.param.max, Math.max(f.param.min, (c.o[pk] ?? f.param.def) + n)); render(); break; }
     case 'dosa': { const m = el.dataset.m; const c = S.cart.dosa || (S.cart.dosa = {q: 0, o: {}}); if (m === 'n') { S.dosaMode = 'n'; c.q = Math.max(c.q, 1); } else { S.dosaMode = null; c.q = c.q === +m ? 0 : +m; } render(); break; }
-    case 'addcart': { const m = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast'); const now = logTimeFor(k, m); Object.entries(S.cart).forEach(([fid, c]) => { if (c.q < 0) { let left = -c.q; d.items.filter(it => it.f === fid && mealOf(it) === m).sort((a, b) => (b.t || 0) - (a.t || 0)).forEach(it => { if (left <= 0) return; const take = Math.min(left, it.q); it.q = Math.round((it.q - take) * 100) / 100; left -= take; }); d.items = d.items.filter(it => it.q > 0); return; } if (c.q > 0) d.items.push({id: uid(), f: fid, q: c.q, o: {...(FMAP[fid].sauces ? Object.fromEntries(FMAP[fid].sauces.map(s => [s.key, sauceLv(s, c.o)])) : {}), ...(FMAP[fid].param ? {[FMAP[fid].param.key]: c.o[FMAP[fid].param.key] ?? FMAP[fid].param.def} : {})}, t: now, m}); }); S.cart = {}; S.dosaMode = null; S.meal = null; S.logTime = null; touch(k); toast(`Saved to ${MEALN[m]}`); location.hash = '#today'; break; }
+    case 'addcart': { const m = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast'); const now = logTimeFor(k, m); Object.entries(S.cart).forEach(([fid, c]) => { if (c.q < 0) { let left = -c.q; d.items.filter(it => it.f === fid && mealOf(it) === m).sort((a, b) => (b.t || 0) - (a.t || 0)).forEach(it => { if (left <= 0) return; const take = Math.min(left, it.q); it.q = Math.round((it.q - take) * 100) / 100; left -= take; }); d.items = d.items.filter(it => it.q > 0); return; } if (c.q > 0) d.items.push({id: uid(), f: fid, q: c.q, o: {...(FMAP[fid].sauces ? Object.fromEntries(FMAP[fid].sauces.map(s => [s.key, sauceLv(s, c.o)])) : {}), ...(FMAP[fid].param ? {[FMAP[fid].param.key]: c.o[FMAP[fid].param.key] ?? FMAP[fid].param.def} : {})}, t: now, m}); }); S.cart = {}; S.dosaMode = null; S.meal = null; S.logTime = null; touch(k); toast(`Added to ${MEALN[m]}`); location.hash = '#meals'; break; }
     case 'stdday': { const now = Date.now(); STANDARD_DAY.forEach(s => d.items.push({id: uid(), f: s.f, q: s.q, o: s.o || {}, t: now, m: STD_MEAL[s.f] || 'breakfast'})); touch(k); toast('Standard day added'); location.hash = '#today'; break; }
     case 'edititem': S.sheet = {type: 'item', id}; render(); break;
     case 'itemq': { const it = d.items.find(x => x.id === id); if (!it) break; const st = stepOf(it.f); const dq = it.q > 1 || n > 0 ? n : -st; const q = Math.round((it.q + dq) / st) * st;
@@ -1159,7 +1163,7 @@ document.addEventListener('click', e => {
     case 'hidereview': S.hideReview = true; render(); break;
     case 'suppundo': d.supp = d.supp || {}; dueList(k).forEach(x => d.supp[x.id] = false); touch(k); toast('Supplements unticked'); break;
     case 'suppall': d.supp = d.supp || {}; dueList(k).forEach(x => d.supp[x.id] = true); touch(k); toast('All supplements ticked'); break;
-    case 'repeatmeal': { const yk = addDays(k, -1); const its = (S.days[yk]?.items || []).filter(it => mealOf(it) === id); const t = logTimeFor(k, id); S.logTime = null; its.forEach(it => d.items.push({id: uid(), f: it.f, q: it.q, o: {...(it.o || {})}, t, m: id})); touch(k); toast(`Added yesterday's ${MEALN[id].toLowerCase()}`); location.hash = '#today'; break; }
+    case 'repeatmeal': { const yk = addDays(k, -1); const its = (S.days[yk]?.items || []).filter(it => mealOf(it) === id); const t = logTimeFor(k, id); S.logTime = null; its.forEach(it => d.items.push({id: uid(), f: it.f, q: it.q, o: {...(it.o || {})}, t, m: id})); touch(k); toast(`Added yesterday's ${MEALN[id].toLowerCase()}`); location.hash = '#meals'; break; }
     case 'export': exportData(id); break;
     case 'addnap': { const dr = S.napDraft || {s: hhmm(Date.now() - 3600e3), e: hhmm(Date.now())}; let st = atClock(k, dr.s), en = atClock(k, dr.e); if (en <= st) en += 864e5; if (en - st > 10 * 3600e3) { toast('That nap is over 10 h — check the times'); break; } d.ci = d.ci || {}; d.ci.naps = d.ci.naps || []; d.ci.naps.push({id: uid(), s: st, e: en}); S.napDraft = null; touch(k); toast(`Nap added · ${fmtH((en - st) / 3600e3)}`); break; }
     case 'delnap': d.ci.naps = (d.ci.naps || []).filter(n => n.id !== id); touch(k); break;
