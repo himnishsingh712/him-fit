@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.12.1';
+const APP_VERSION = '1.12.2';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -646,7 +646,6 @@ function viewTrends() {
   h += `<div class="card"><div class="row"><h2>Alcohol</h2><span class="big">${av.length ? sum(av).toFixed(1) : '—'} <small>standard drinks</small></span></div>${av.some(x => x > 0) ? bars(as, {label: 'Standard drinks per day'}) : '<div class="muted small">No drinks logged.</div>'}<div class="muted small">${av.filter(x => x > 0).length} drinking days · ${fmt(akcal,'kcal')} kcal from drinks</div></div>`;
   const ss = series(d => d?.ci?.sl, 'var(--water)'), sv = ss.filter(x => x.v != null).map(x => x.v);
   h += `<div class="card"><div class="row"><h2>Sleep</h2><span class="big">${sv.length ? mean(sv).toFixed(1) + ' h' : '—'} ${sv.length && mean(sv) < 7 ? '<span class="chip close">LOW</span>' : ''}</span></div>${sv.length ? bars(ss, {line: 7, min: 9, label: 'Hours slept'}) : '<div class="muted small">Nothing logged.</div>'}<div class="muted small">${sv.length} nights logged · target 7–8 h</div></div>`;
-  h += energyCompareCard();
   return h + '</div>';
 }
 function viewSupps() {
@@ -935,7 +934,6 @@ function viewMe() {
     ${tl('Weight', b.kg.toFixed(1) + ' kg', '7-day average')}
     ${tl('Body fat', b.bf != null ? b.bf.toFixed(1) + '%' : '—', b.bf != null ? `${bfBand(b.bf, p.sex)} · ${b.bfNavy != null ? 'Navy ' + b.bfNavy.toFixed(1) : ''}${b.bfNavy != null && b.bfRfm != null ? ' / ' : ''}${b.bfRfm != null ? 'RFM ' + b.bfRfm.toFixed(1) : ''} · ${shortDate(b.tape.k)}` : 'measure waist (+ neck)')}
     ${tl('FFMI', b.ffmiAdj != null ? b.ffmiAdj.toFixed(1) : '—', b.ffmiAdj != null ? ffmiBand(b.ffmiAdj) + ' · lean ' + b.lean.toFixed(1) + ' kg' : 'needs body fat')}
-    ${tl('BMR', fmt(b.bmrNow,'kcal'), 'kcal at full rest')}
     ${tl('Waist / height', b.whtr != null ? b.whtr.toFixed(2) : '—', b.whtr != null ? (b.whtr < 0.5 ? 'healthy, under 0.5' : 'above 0.5: belly fat risk') : 'needs waist')}
     ${tl('BMI', b.bmi.toFixed(1), bmiBand(b.bmi) + ' · ignores muscle')}</div></div>`;
   h += physiqueCard(p, b);
@@ -955,10 +953,6 @@ function viewMe() {
   const tg = pl.targets; const tc = targetChange(k);
   if (tc) h += `<div class="flag info span2"><div><strong>This week:</strong> ${esc(tc.text)}</div></div>`;
   h += `<div class="card span2"><div class="row"><span></span><a href="#" class="small muted" data-act="histsheet">Target history ›</a></div></div>`;
-  h += `<div class="card span2"><h2>Daily targets</h2><div class="tiles t3">
-    ${tl('Protein', tg.p + ' g', `${GMAP[p.goal].prot} g per kg`)}${tl('Carbs', tg.c + ' g', 'the rest of your calories')}${tl('Fat', `${pl.fatMin}–${tg.f} g`, 'min 0.8 g/kg · max 30%')}
-    ${tl('Fibre', tg.fib + ' g', '14 g per 1,000 kcal')}${tl('Water', (pl.water / 1000).toFixed(2).replace(/0$/, '') + ' L', '35 ml/kg + training')}${tl('Sat. fat', '≤ ' + tg.sat + ' g', 'max 10% of calories')}</div>
-    <div class="muted small">Recalculated every Monday from the 7-day average weight before it (${pl.kgSrc}), so one heavy weigh-in never moves your numbers. Vitamins and minerals follow the reference intakes for your age and sex.</div></div>`;
   const eta = etaWeeks(p, b.kg, b.paceActual), etaPlan = etaWeeks(p, b.kg, pl.pace);
   h += `<div class="card span2"><div class="row"><h2>Goal</h2><span class="chip ok">${esc(GMAP[p.goal].n)}</span></div><div class="tiles t3">
     ${tl('Target', p.targetKg + ' kg', `${(p.targetKg - b.kg >= 0 ? '+' : '')}${(p.targetKg - b.kg).toFixed(1)} kg to go`)}
