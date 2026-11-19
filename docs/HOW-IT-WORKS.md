@@ -137,3 +137,6 @@ All raw logs are kept, so v1 and v2 can both be re-run over the same days on 16 
 
 ## v1.12.1 — Save confirmations
 A short "✓ …" message plus a green outline on the field for: weight, sleep times, tapping a timed tag or Moment ("tap again to add another"), editing a time in the Moments/tags list, and changing amount, time or meal in the food editor. Places that already show a change (lit buttons, moving bars, disappearing rows) are unchanged.
+
+## v1.12.2 — Repeats removed
+Trends no longer shows "Energy: predicted vs felt" (it's on Energy). Me drops the Daily targets card (Nutrients shows every target) and the BMR tile in Body now (first line of "Your calories, step by step"). Parked ideas: project doc claude/himfit-ux-backlog.md.
