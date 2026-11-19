@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.12.2';
+const APP_VERSION = '1.12.3';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -538,9 +538,9 @@ function viewCheckin() {
   h += `<div class="card"><div class="row"><div><h2>Bong hits</h2><div class="muted small">${hitsNote(k)}</div></div>${stepper('cistep', 'hits', ci.hits ?? '—')}</div>${hitsChainLine(k)}<div class="muted small">Tap + when you take them. 5+ taps in a row count as catching up: spread back at ~6 an hour (12 hits = last 2 h). Change it if they were spread out more.</div></div>`;
   h += `<div class="card"><div class="row"><h2>Cigarettes</h2>${stepper('cistep', 'cigs', ci.cigs ?? '—')}</div></div>`;
   { const ev = (ci.ev || []).slice().sort((a, b) => a.t - b.t);
-    h += `<div class="card"><h2>Moments</h2><div class="btns c3">${['hot', 'cool', 'spicy'].map(id => `<button class="btn" data-act="evadd" data-id="${id}">${EVN[id]}${evCount(ev, id) ? ` ×${evCount(ev, id)}` : ''}</button>`).join('')}</div>
-      ${evList(ev, Object.keys(EVN))}
-      <div class="muted small">Each tap adds one at the current time — it never replaces an earlier one. Fix the time or remove it in the list. Counts in your energy score right away.</div></div>`; }
+    h += `<div class="card"><h2>Moments</h2><div class="btns c3">${['hot', 'cool', 'spicy'].map(id => `<button class="btn" data-act="evadd" data-id="${id}">${EVN[id]}</button>`).join('')}</div>
+      ${evList(ev, Object.keys(EVN), 'moments')}
+      <div class="muted small">Tap one, check the time, tap OK. Each OK adds one — it never replaces an earlier one. They show on your energy chart.</div></div>`; }
   const drinks = ci.drinks || [];
   h += `<div class="card"><div class="row"><h2>Drinks</h2><button class="pill" data-act="adddrink">+ Add drink</button></div>${drinks.length ? `<div class="list">${drinks.map(dr => { const v = drinkVec(dr); return `<div class="li"><div class="main"><div class="t">${esc(drinkLabel(dr))}</div><div class="s">${fmt(v.kcal,'kcal')} kcal · ${dr.k === 'caf' ? Math.round(v.caf || 0) + ' mg caffeine' : (stdDrinks({ci:{drinks:[dr]}})).toFixed(1) + ' standard drinks'}${dr.t ? ' · ' + tlabel(dr.t) : ''}</div></div><button class="iconbtn" data-act="deldrink" data-id="${dr.id}" aria-label="Remove drink">${ic('x',18)}</button></div>`; }).join('')}</div><div class="muted small">Total ${stdDrinks(d).toFixed(1)} standard drinks (10 g alcohol each). Calories count toward your day.</div>` : `<div class="muted small">None logged. ${ci.drinks ? '' : '<button class="btn" data-act="nodrinks" style="height:36px;margin-left:6px">Log “none today”</button>'}</div>`}</div>`;
   h += `</div>`;
@@ -675,15 +675,16 @@ const TIMED = {crashed: '😴 Crashed', great: '😊 Great mood', productive: '�
 const TAG_GROUPS = [['Body', [['sick', 0], ['crashed', 1]]], ['Mood', [['stressed', 0], ['great', 1]]], ['Day', [['exam', 0], ['party', 0], ['productive', 1]]], ['Active', [['gym', 1], ['football', 1], ['racket', 1]]], ['Chill', [['chill', 1]]]];
 const TAGN = Object.fromEntries(TAGS);
 const tagRow = (on, act) => `<div class="seg5">${TAGS.map(([id, n]) => `<button class="${on.includes(id) ? 'on' : ''}" data-act="${act}" data-id="${id}">${n}</button>`).join('')}</div>`;
-function evList(ev, keys) { const xs = (ev || []).filter(x => keys.includes(x.k)).sort((a, b) => a.t - b.t); if (!xs.length) return '';
-  return `<div class="small" style="font-weight:600;margin-top:4px">Logged today</div><div class="list">${xs.map(x => `<div class="li"><div class="main"><div class="t">${EVN[x.k] || TIMED[x.k] || x.k}</div></div><input class="field" style="width:130px" type="time" value="${hhmm(x.t)}" data-act="evtime" data-id="${x.id}" aria-label="Time"><button class="iconbtn" data-act="evdel" data-id="${x.id}" aria-label="Remove">${ic('x',16)}</button></div>`).join('')}</div>`; }
+function evList(ev, keys, box) { const xs = (ev || []).filter(x => keys.includes(x.k)).sort((a, b) => a.t - b.t); if (!xs.length) return '';
+  const open = (S.evOpen || {})[box];
+  return `<button class="linkish small muted" data-act="evtoggle" data-id="${box}" style="display:block;margin-top:6px">Logged today (${xs.length}) ${open ? '▴' : '▾'}</button>` + (!open ? '' : `<div class="list">${xs.map(x => `<div class="li"><div class="main"><div class="t">${EVN[x.k] || TIMED[x.k] || x.k}</div></div><input class="field" style="width:130px" type="time" value="${hhmm(x.t)}" data-act="evtime" data-id="${x.id}" aria-label="Time"><button class="iconbtn" data-act="evdel" data-id="${x.id}" aria-label="Remove">${ic('x',16)}</button></div>`).join('')}</div>`); }
 const evCount = (ev, k) => (ev || []).filter(x => x.k === k).length;
 function dayTagsCard(ci) { const on = ci.tags || [];
   return `<div class="card"><h2>Day tags</h2>${TAG_GROUPS.map(([g, xs]) => `<div class="row" style="justify-content:flex-start;gap:8px;flex-wrap:wrap;margin:4px 0"><span class="small muted" style="width:52px;flex:none">${g}</span>${xs.map(([id, timed]) => timed
-      ? `<button class="chipbtn" data-act="evadd" data-id="${id}">${TIMED[id]}${evCount(ci.ev, id) ? ` ×${evCount(ci.ev, id)}` : ''}</button>`
+      ? `<button class="chipbtn" data-act="evadd" data-id="${id}">${TIMED[id]}</button>`
       : `<button class="chipbtn ${on.includes(id) ? 'on' : ''}" data-act="daytag" data-id="${id}">${TAGN[id]}</button>`).join('')}</div>`).join('')}
-    ${evList(ci.ev, Object.keys(TIMED))}
-    <div class="muted small">Sick, Stressed, Exam/deadline and Party are for the whole day (tap again to turn off). The others log the time you tap them — each tap adds one; fix the time or remove it below. All count in your energy score. Sick days are left out of maintenance.</div></div>`; }
+    ${evList(ci.ev, Object.keys(TIMED), 'tags')}
+    <div class="muted small">Sick, Stressed, Exam/deadline and Party are for the whole day (tap again to turn off). The others ask for the time (starts at now), then OK — each one adds an entry. All count in your energy score. Sick days are left out of maintenance.</div></div>`; }
 const WORDS = {sq:['Terrible','Poor','Okay','Good','Great'], mood:['Low','Irritable','Okay','Good','Great'], feel:['Drained','Heavy','Okay','Light','Energetic']};
 const hhmm = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const tlabel = ms => new Date(ms).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
@@ -969,6 +970,7 @@ function viewMe() {
 // ================= sheets =================
 function sheetHTML() {
   const sh = S.sheet; if (!sh) return '';
+  if (sh.type === 'ev') return `<div class="sheetbg" data-act="closesheet"><div class="sheet" role="dialog" aria-label="Log" data-stop="1"><div class="row"><h3>${EVN[sh.k] || TIMED[sh.k]}</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div><div class="row"><span>Time</span><input class="field" style="width:150px" type="time" value="${sh.time}" data-act="evsheettime" aria-label="Time"></div><button class="btn primary" data-act="evok">OK</button></div></div>`;
   if (sh.type === 'hist') { const cfg = CFG(); return `<div class="sheetbg" data-act="closesheet"><div class="sheet tall" role="dialog" aria-label="Target history" data-stop="1"><div class="row"><h3>Target history</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div><div class="muted small">Every change to your daily targets, with the reason. Written automatically.</div>${(cfg.changes || []).slice().sort((a, b) => a.date < b.date ? 1 : -1).map(c => `<div class="row small" style="justify-content:flex-start;align-items:flex-start"><span class="muted" style="width:64px;flex:none">${shortDate(c.date)}</span><span>${esc(c.text)}</span></div>`).join('') || '<div class="muted small">No changes yet.</div>'}</div></div>`; }
   if (sh.type === 'item') {
     const d = day(S.date); const it = d.items.find(x => x.id === sh.id); if (!it) return '';
@@ -1121,7 +1123,9 @@ document.addEventListener('click', e => {
     case 'itemsauce': { const it = d.items.find(x => x.id === id); if (it) { it.o = {...(it.o || {}), [el.dataset.k]: n}; touch(k); } break; }
     case 'rate': { const dd = day(todayKey()); dd.ci = dd.ci || {}; dd.ci.er = (dd.ci.er || []).filter(r => r.s !== n); let m = null; try { m = energyFor(todayKey(), Date.now(), {noRates: true}).cur.score; } catch (er) {} dd.ci.er.push({s: n, v: +el.dataset.v, t: Date.now(), m}); touch(todayKey()); toast('Thanks — noted'); break; }
     case 'rateskip': { e.preventDefault(); const dd = day(todayKey()); dd.ci = dd.ci || {}; dd.ci.er = (dd.ci.er || []).filter(r => r.s !== n); dd.ci.er.push({s: n, v: null, t: Date.now()}); touch(todayKey()); break; }
-    case 'evadd': { d.ci = d.ci || {}; d.ci.ev = d.ci.ev || []; const t = k === todayKey() ? Date.now() : mealTime(k, 'esnack'); const nid = uid(); d.ci.ev.push({id: nid, k: id, t}); touch(k); toast(`✓ ${EVN[id] || TIMED[id]} logged · ${tlabel(t)} · tap again to add another`); okMark(`[data-act=evtime][data-id="${nid}"]`); break; }
+    case 'evadd': S.sheet = {type: 'ev', k: id, time: hhmm(k === todayKey() ? Date.now() : mealTime(k, 'esnack'))}; render(); break;
+    case 'evok': { d.ci = d.ci || {}; d.ci.ev = d.ci.ev || []; const id2 = S.sheet.k, t = atClock(k, S.sheet.time); d.ci.ev.push({id: uid(), k: id2, t}); S.sheet = null; touch(k); toast(`✓ ${EVN[id2] || TIMED[id2]} logged · ${tlabel(t)}`); break; }
+    case 'evtoggle': S.evOpen = S.evOpen || {}; S.evOpen[id] = !S.evOpen[id]; render(); break;
     case 'evdel': { d.ci.ev = (d.ci?.ev || []).filter(x => x.id !== id); touch(k); break; }
     case 'param': { const f = FMAP[id]; const c = S.cart[id]; const pk = f.param.key; c.o[pk] = Math.min(f.param.max, Math.max(f.param.min, (c.o[pk] ?? f.param.def) + n)); render(); break; }
     case 'dosa': { const m = el.dataset.m; const c = S.cart.dosa || (S.cart.dosa = {q: 0, o: {}}); if (m === 'n') { S.dosaMode = 'n'; c.q = Math.max(c.q, 1); } else { S.dosaMode = null; c.q = c.q === +m ? 0 : +m; } render(); break; }
@@ -1198,6 +1202,7 @@ document.addEventListener('change', e => {
   if (act === 'sleeptime') { d.ci = d.ci || {}; const mc = d.ci.mc && !d.ci.mc.skipped ? d.ci.mc : (d.ci.mc = {bed: PROF()?.bed || '01:00', wake: PROF()?.wake || '09:00', t: Date.now()}); mc[el.dataset.f] = el.value; const sl = Math.round((atClock(k, mc.wake, false) - bedMs(k, mc.bed)) / 3600e3 * 4) / 4; if (sl > 0 && sl < 16) d.ci.sl = sl; touch(k); toast(`✓ Sleep saved${sl > 0 && sl < 16 ? ' · ' + fmtH(sl) : ''}`); okMark(`[data-act=sleeptime][data-f=${el.dataset.f}]`); }
   if (act === 'cartset') { const id = el.dataset.id, base = +el.dataset.base || 0; const c = S.cart[id] || (S.cart[id] = {q: 0, o: {...sauceDefaults(FMAP[id])}}); c.q = Math.max(-base, roundStep(el.value, stepOf(id)) - base); if (FMAP[id].param && !c.o[FMAP[id].param.key]) c.o[FMAP[id].param.key] = FMAP[id].param.def; if (id === 'dosa' && c.q) S.dosaMode = 'n'; render(); }
   if (act === 'itemqset') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it) { it.q = Math.max(stepOf(it.f), roundStep(el.value, stepOf(it.f)) || it.q); touch(k); toast(`✓ Updated · ${fq(it.q)}`); okMark(`[data-act=itemqset][data-id="${it.id}"]`); } }
+  if (act === 'evsheettime') { if (el.value) S.sheet.time = el.value; }
   if (act === 'evtime') { const x = (d.ci?.ev || []).find(y => y.id === el.dataset.id); if (x && el.value) { x.t = atClock(k, el.value); touch(k); toast(`✓ Time changed to ${tlabel(x.t)}`); okMark(`[data-act=evtime][data-id="${x.id}"]`); } }
   if (act === 'logtime') { S.logTime = el.value || null; }
   if (act === 'itemtime') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it && el.value) { it.t = atClock(k, el.value); touch(k); toast('✓ Updated · time ' + tlabel(it.t)); okMark(`[data-act=itemtime][data-id="${it.id}"]`); } }

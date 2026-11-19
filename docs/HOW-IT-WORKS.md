@@ -140,3 +140,6 @@ A short "✓ …" message plus a green outline on the field for: weight, sleep t
 
 ## v1.12.2 — Repeats removed
 Trends no longer shows "Energy: predicted vs felt" (it's on Energy). Me drops the Daily targets card (Nutrients shows every target) and the BMR tile in Body now (first line of "Your calories, step by step"). Parked ideas: project doc claude/himfit-ux-backlog.md.
+
+## v1.12.3 — Moments and timed tags: time + OK, list hidden
+Tapping a Moment or timed tag opens a small panel (time, starting at now, and OK); OK logs it with a ✓ message. The entries no longer show all the time: "Logged today (n) ▾" opens the list for fixing a time or removing one. Entries show as icons on the energy chart.
