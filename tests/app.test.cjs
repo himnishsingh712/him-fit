@@ -59,6 +59,17 @@ const go = async h => { w.location.hash = h; await wait(40); };
   await go('#checkin');
   ok('no sleep-hours stepper', !$('[data-act=cistep][data-id=sl]'));
   ok('sleep shows times', $$('[data-act=sleeptime]').length === 2);
+  click('[data-act=evadd][data-id=spicy]'); await wait(10); click('[data-act=evadd][data-id=cool]'); await wait(10);
+  ok('moments logged in check-in', doc.body.textContent.includes('Spicy time') && $$('[data-act=evdel]').length === 2);
+  click('[data-act=evdel]'); await wait(10); ok('moment removed', $$('[data-act=evdel]').length === 1);
+  if (new Date().getHours() >= 10) {
+    const hh = x => String(x).padStart(2, '0'), wk = new Date(Date.now() - 4 * 3600e3);
+    setv('[data-act=sleeptime][data-f=wake]', hh(wk.getHours()) + ':' + hh(wk.getMinutes())); await wait(20);
+    await go('#today'); ok('energy rating card shows 3 h after waking', !!$('.rcard') && txt('.rcard').includes('Check 1 of 3'), txt('.rcard'));
+    click('.rcard [data-act=rate][data-v="4"]'); await wait(30); ok('rating saved and card hides', !$('.rcard'));
+    await go('#energy'); ok('rating shows on the chart', !!$('.ecard svg rect title'));
+    await go('#checkin');
+  }
   setv('[data-act=ci][data-f=w]', '69.5'); await wait(20);
   ok('weight note shows correction rule', doc.body.textContent.includes('counts as'), '');
   ok('no tape card in check-in', !doc.body.textContent.includes('Tape measure'));
@@ -66,6 +77,7 @@ const go = async h => { w.location.hash = h; await wait(40); };
   setv('[data-nap=s]', '18:00', 'input'); setv('[data-nap=e]', '22:00', 'input'); click('[data-act=addnap]'); await wait(30);
   ok('nap added and counted in sleep', doc.body.textContent.includes('4 h today') && doc.body.textContent.includes('with naps'), txt('.card .muted.small'));
   await go('#energy');
+  ok('day split into thirds', ['Early day','Midday','Late day'].every(x => doc.body.textContent.includes(x)) && !$$('.ph .l').some(e => e.textContent === 'Afternoon'), $$('.ph .l').map(e => e.textContent).join());
   ok('energy screen with breakdown', $('.ecard') && doc.body.textContent.includes('Day tags') && doc.body.textContent.includes('model v1'));
   const lastItem = () => { const ds = JSON.parse(w.localStorage.getItem(Object.keys(w.localStorage).find(x => x.endsWith(':days'))) || '{}'); const its = Object.values(ds).flatMap(d => d.items || []); return its[its.length - 1]; };
   await go('#log'); ok('log screen has a time field', !!$('[data-act=logtime]'));

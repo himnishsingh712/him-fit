@@ -167,9 +167,10 @@ export const ratingBand = s => s >= 80 ? 5 : s >= 65 ? 4 : s >= 50 ? 3 : s >= 35
 export function energyDay(inp, now, endMs) {
   const pts = []; for (let t = inp.wake; t <= endMs; t += 10 * MIN) pts.push(energyAt(inp, t));
   const cur = energyAt(inp, clamp(now, inp.wake, endMs));
-  const phase = (from, to) => { const xs = pts.filter(p => p.t >= from && p.t < to && !p.asleep); if (!xs.length) return null; return {score: Math.round(xs.reduce((s, p) => s + p.score, 0) / xs.length), past: to <= now, now: from <= now && now < to}; };
-  const d0 = new Date(inp.wake); const at = h => new Date(d0.getFullYear(), d0.getMonth(), d0.getDate(), h).getTime();
-  const phases = [{n:'Morning', v: phase(inp.wake, at(13))}, {n:'Afternoon', v: phase(Math.max(inp.wake, at(13)), at(18))}, {n:'Evening', v: phase(Math.max(inp.wake, at(18)), endMs + 1)}];
+  // the waking day split into three equal parts; the part you're in shows only what's happened so far
+  const phase = (from, to) => { const isNow = from <= now && now < to; const xs = pts.filter(p => p.t >= from && p.t < (isNow ? now + 1 : to) && !p.asleep); if (!xs.length) return null; return {score: Math.round(xs.reduce((s, p) => s + p.score, 0) / xs.length), past: to <= now, now: isNow, from, to}; };
+  const third = (endMs - inp.wake) / 3, cut = i => inp.wake + i * third;
+  const phases = [{n:'Early day', v: phase(cut(0), cut(1))}, {n:'Midday', v: phase(cut(1), cut(2))}, {n:'Late day', v: phase(cut(2), endMs + 1)}];
   // what would help: simulate a change now and see the score 90 min later
   const help = [];
   if (now < endMs - H && !cur.asleep) {
