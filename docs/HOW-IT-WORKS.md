@@ -91,3 +91,6 @@ Six spots, whenever you like (Me tab → Measurements → Update measurements, w
 ## v1.6.0 — Outside foods and taco sauces
 - **Outside foods** (new "Outside food" group at the bottom of Your foods): Domino's and Pizza Hut medium Margherita per slice (6 slices = whole), garlic breadsticks per serve, cheesy dip, Pizza Hut garlic bread cheese and loaded bread stix per order, Sadak Chaap dal makhani per ~500 ml box (quarter steps), butter naan / rumali / butter tandoori roti per piece, Tea Post mini kachori per order of 4 (¼ = 1 piece). Values per portion, from claude/outside-foods-database.md (official brand data where available, HealthifyMe-checked).
 - **Taco sauces:** each sauce (ketchup, chipotle, mustard) is None / 1 tsp / 2 tsp per taco, 1 tsp = 5 g. Default is 1 tsp of each (the normal recipe) every time; the choice is stored on that entry only and can be changed later from the item sheet. Old entries count as 1 tsp of each, same as before.
+
+## v1.6.1 — Time eaten on the Log screen
+The Log screen has a "Time eaten" field. Today it starts at the current time; on a past day it starts at that meal's usual time. Picking a meal only labels the food — it never moves the time (before, adding to an earlier meal reset the time to the meal's default, e.g. 1:30 PM for lunch). "Repeat yesterday's meal" uses the same time.

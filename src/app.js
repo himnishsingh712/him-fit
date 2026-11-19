@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.6.1';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -452,13 +452,16 @@ function viewToday() {
   h += `<a class="card" href="#checkin" style="text-decoration:none;color:inherit"><div class="row"><h2>Check-in</h2><span class="small" style="font-weight:600;color:var(--acc)">Log sleep, drinks, hits →</span></div><div class="tiles">${tile('Weight', ci.w ? ci.w + ' kg' : '—')}${tile('Sleep', ci.sl != null || napHours(ci) ? ((ci.sl || 0) + napHours(ci)).toFixed(1).replace(/\.0$/, '') + ' h' + (napHours(ci) ? ' · nap' : '') : '—')}${tile('Trained', ci.tr == null ? '—' : ci.tr ? 'Yes' : 'No')}${tile('Bong hits', ci.hits ?? '—')}${tile('Cigarettes', ci.cigs ?? '—')}${tile('Drinks', ci.drinks?.length ? stdDrinks(d).toFixed(1) + ' std' : (ci.drinks ? '0' : '—'))}</div><div class="muted small">Weight, sleep, training, bong hits, cigarettes and drinks — all optional, kept separate from food.</div></a>`;
   return h + '</div>';
 }
+// time for food added on the Log screen: what you set, else now (today) or the meal's usual time (past days). The meal never moves it.
+function logTimeFor(k, m) { if (S.logTime) return atClock(k, S.logTime); return k === todayKey() ? Date.now() : mealTime(k, m); }
 function viewLog() {
   let h = header('Log food');
   const cart = S.cart; const cartKeys = Object.keys(cart).filter(id => cart[id].q > 0);
   h += `<div class="grid">`;
   const curMeal = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast');
   h += `<button class="card span2 drinkbtn" data-act="logdrink"><b>Coffee, tea, energy drinks</b><span class="small muted">Logs caffeine with the time, for your energy score. Alcohol is in Check-in.</span></button>`;
-  h += `<div class="card span2"><h2>Adding to</h2><div class="btns c3">${MEALS.map(m => `<button class="btn ${m.id === curMeal ? 'on' : ''}" data-act="meal" data-id="${m.id}" style="padding:0 6px;font-size:13px">${m.n}</button>`).join('')}</div></div>`;
+  h += `<div class="card span2"><h2>Adding to</h2><div class="btns c3">${MEALS.map(m => `<button class="btn ${m.id === curMeal ? 'on' : ''}" data-act="meal" data-id="${m.id}" style="padding:0 6px;font-size:13px">${m.n}</button>`).join('')}</div>
+    <div class="row" style="margin-top:10px"><span style="font-weight:600">Time eaten</span><input class="field" style="width:150px" type="time" value="${S.logTime || hhmm(logTimeFor(S.date, curMeal))}" data-act="logtime" aria-label="Time eaten"></div><div class="muted small">${S.date === todayKey() ? 'Starts at now. Change it if you ate earlier — the meal you pick doesn\'t change it.' : 'Set to when you ate that day.'}</div></div>`;
   const logged = {}; (day(S.date).items || []).forEach(it => { logged[it.f] = (logged[it.f] || 0) + it.q; });
   { const yIts = (S.days[addDays(S.date, -1)]?.items || []).filter(it => mealOf(it) === curMeal); if (yIts.length) { const v = {}; yIts.forEach(it => vecAdd(v, itemVec(it), 1)); h += `<button class="card span2 drinkbtn" data-act="repeatmeal" data-id="${curMeal}" style="border-color:var(--acc)"><b>Repeat yesterday's ${MEALN[curMeal].toLowerCase()}</b><span class="small muted">${esc(yIts.map(itemLabel).join(', '))} · ${fmt(v.kcal,'kcal')} kcal · ${fmt(v.p,'g')} g</span></button>`; } }
   const use = {}; rangeKeys(addDays(S.date, -1), 30).forEach(x => (S.days[x]?.items || []).forEach(it => { if (mealOf(it) === curMeal) use[it.f] = (use[it.f] || 0) + 1; }));
@@ -1048,7 +1051,7 @@ function render() {
   document.getElementById('app').innerHTML = `<main class="wrap">${(VIEWS[S.view] || viewToday)()}</main>${S.view === 'setup' ? '' : nav()}${sheetHTML()}${S.toast ? `<div class="toast" role="status">${esc(S.toast)}</div>` : ''}`;
   window.scrollTo(0, sy);
 }
-function route() { if (!S.user) { render(); return; } if (location.hash !== '#log') S.meal = null; const v = location.hash.replace('#', ''); S.view = VIEWS[v] ? v : 'today'; if (!PROF() && !S.skipSetup && S.view !== 'setup') { S.view = 'setup'; S.autoSetup = true; startSetup(); } if (S.view === 'setup' && !S.pf) startSetup(); S.open = null; S.openMeal = null; render(); window.scrollTo(0, 0); }
+function route() { if (!S.user) { render(); return; } if (location.hash !== '#log') { S.meal = null; S.logTime = null; } const v = location.hash.replace('#', ''); S.view = VIEWS[v] ? v : 'today'; if (!PROF() && !S.skipSetup && S.view !== 'setup') { S.view = 'setup'; S.autoSetup = true; startSetup(); } if (S.view === 'setup' && !S.pf) startSetup(); S.open = null; S.openMeal = null; render(); window.scrollTo(0, 0); }
 let toastT; function toast(m) { S.toast = m; clearTimeout(toastT); toastT = setTimeout(() => { S.toast = null; render(); }, 1800); render(); }
 
 // ================= events =================
@@ -1067,7 +1070,7 @@ document.addEventListener('click', e => {
     case 'itemsauce': { const it = d.items.find(x => x.id === id); if (it) { it.o = {...(it.o || {}), [el.dataset.k]: n}; touch(k); } break; }
     case 'param': { const f = FMAP[id]; const c = S.cart[id]; const pk = f.param.key; c.o[pk] = Math.min(f.param.max, Math.max(f.param.min, (c.o[pk] ?? f.param.def) + n)); render(); break; }
     case 'dosa': { const m = el.dataset.m; const c = S.cart.dosa || (S.cart.dosa = {q: 0, o: {}}); if (m === 'n') { S.dosaMode = 'n'; c.q = Math.max(c.q, 1); } else { S.dosaMode = null; c.q = c.q === +m ? 0 : +m; } render(); break; }
-    case 'addcart': { const m = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast'); const nowMeal = mealByHour(new Date().getHours()); const past = S.date !== todayKey() || MEALS.findIndex(x => x.id === m) < MEALS.findIndex(x => x.id === nowMeal); const now = past ? mealTime(k, m) : Date.now(); if (past) setTimeout(() => toast(`Time set to ${tlabel(now)} — change it by tapping the item`), 1900); Object.entries(S.cart).forEach(([fid, c]) => { if (c.q > 0) d.items.push({id: uid(), f: fid, q: c.q, o: {...(FMAP[fid].sauces ? Object.fromEntries(FMAP[fid].sauces.map(s => [s.key, sauceLv(s, c.o)])) : {}), ...(FMAP[fid].param ? {[FMAP[fid].param.key]: c.o[FMAP[fid].param.key] ?? FMAP[fid].param.def} : {})}, t: now, m}); }); S.cart = {}; S.dosaMode = null; S.meal = null; touch(k); toast('Added'); location.hash = '#today'; break; }
+    case 'addcart': { const m = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast'); const now = logTimeFor(k, m); Object.entries(S.cart).forEach(([fid, c]) => { if (c.q > 0) d.items.push({id: uid(), f: fid, q: c.q, o: {...(FMAP[fid].sauces ? Object.fromEntries(FMAP[fid].sauces.map(s => [s.key, sauceLv(s, c.o)])) : {}), ...(FMAP[fid].param ? {[FMAP[fid].param.key]: c.o[FMAP[fid].param.key] ?? FMAP[fid].param.def} : {})}, t: now, m}); }); S.cart = {}; S.dosaMode = null; S.meal = null; S.logTime = null; touch(k); toast(`Added at ${tlabel(now)}`); location.hash = '#today'; break; }
     case 'stdday': { const now = Date.now(); STANDARD_DAY.forEach(s => d.items.push({id: uid(), f: s.f, q: s.q, o: s.o || {}, t: now, m: STD_MEAL[s.f] || 'breakfast'})); touch(k); toast('Standard day added'); location.hash = '#today'; break; }
     case 'edititem': S.sheet = {type: 'item', id}; render(); break;
     case 'itemq': { const it = d.items.find(x => x.id === id); if (it) { it.q = Math.max(stepOf(it.f), it.q + n); touch(k); } break; }
@@ -1096,7 +1099,7 @@ document.addEventListener('click', e => {
     case 'hidereview': S.hideReview = true; render(); break;
     case 'suppundo': d.supp = d.supp || {}; dueList(k).forEach(x => d.supp[x.id] = false); touch(k); toast('Supplements unticked'); break;
     case 'suppall': d.supp = d.supp || {}; dueList(k).forEach(x => d.supp[x.id] = true); touch(k); toast('All supplements ticked'); break;
-    case 'repeatmeal': { const yk = addDays(k, -1); const its = (S.days[yk]?.items || []).filter(it => mealOf(it) === id); const t = S.date === todayKey() && mealByHour(new Date().getHours()) === id ? Date.now() : mealTime(k, id); its.forEach(it => d.items.push({id: uid(), f: it.f, q: it.q, o: {...(it.o || {})}, t, m: id})); touch(k); toast(`Added yesterday's ${MEALN[id].toLowerCase()}`); location.hash = '#today'; break; }
+    case 'repeatmeal': { const yk = addDays(k, -1); const its = (S.days[yk]?.items || []).filter(it => mealOf(it) === id); const t = logTimeFor(k, id); S.logTime = null; its.forEach(it => d.items.push({id: uid(), f: it.f, q: it.q, o: {...(it.o || {})}, t, m: id})); touch(k); toast(`Added yesterday's ${MEALN[id].toLowerCase()}`); location.hash = '#today'; break; }
     case 'export': exportData(id); break;
     case 'addnap': { const dr = S.napDraft || {s: hhmm(Date.now() - 3600e3), e: hhmm(Date.now())}; let st = atClock(k, dr.s), en = atClock(k, dr.e); if (en <= st) en += 864e5; if (en - st > 10 * 3600e3) { toast('That nap is over 10 h — check the times'); break; } d.ci = d.ci || {}; d.ci.naps = d.ci.naps || []; d.ci.naps.push({id: uid(), s: st, e: en}); S.napDraft = null; touch(k); toast(`Nap added · ${fmtH((en - st) / 3600e3)}`); break; }
     case 'delnap': d.ci.naps = (d.ci.naps || []).filter(n => n.id !== id); touch(k); break;
@@ -1135,6 +1138,7 @@ document.addEventListener('change', e => {
   if (act === 'sleeptime') { d.ci = d.ci || {}; const mc = d.ci.mc && !d.ci.mc.skipped ? d.ci.mc : (d.ci.mc = {bed: PROF()?.bed || '01:00', wake: PROF()?.wake || '09:00', t: Date.now()}); mc[el.dataset.f] = el.value; const sl = Math.round((atClock(k, mc.wake, false) - bedMs(k, mc.bed)) / 3600e3 * 4) / 4; if (sl > 0 && sl < 16) d.ci.sl = sl; touch(k); }
   if (act === 'cartset') { const id = el.dataset.id, base = +el.dataset.base || 0; const c = S.cart[id] || (S.cart[id] = {q: 0, o: {...sauceDefaults(FMAP[id])}}); c.q = Math.max(0, roundStep(el.value, stepOf(id)) - base); if (FMAP[id].param && !c.o[FMAP[id].param.key]) c.o[FMAP[id].param.key] = FMAP[id].param.def; if (id === 'dosa' && c.q) S.dosaMode = 'n'; render(); }
   if (act === 'itemqset') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it) { it.q = Math.max(stepOf(it.f), roundStep(el.value, stepOf(it.f)) || it.q); touch(k); } }
+  if (act === 'logtime') { S.logTime = el.value || null; }
   if (act === 'itemtime') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it && el.value) { it.t = atClock(k, el.value); touch(k); } }
   if (act === 'dtime') { S.sheet.time = el.value; }
   if (act === 'dml') { S.sheet.ml = Math.max(0, +el.value || 0); render(); }
