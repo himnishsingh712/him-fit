@@ -113,3 +113,10 @@ All raw logs are kept, so v1 and v2 can both be re-run over the same days on 16 
 ## v1.8.1 — Heat removed, gentler energy checks (still model v2, frozen until 16 Dec)
 - Heat layer removed (user's call).
 - Energy checks are a nudge, not an override: target = your rating's band middle minus your personal bias (mean of rating score − model score over your last 30 checks, once there are 10+; each check now stores the model's score at that moment as `m`). Within ±8 of the model: no change. Beyond: 30% of the gap past 8, halved if the model is ≤40 and you rated higher or ≥80 and you rated lower, capped ±10, fading linearly to 0 over 3 h. Stored predictions still exclude it.
+
+## v1.9.0 — Day tags rework, Trends cleanup, chips
+- **Day tags**, grouped: Body (Sick, 😴 Crashed), Mood (Stressed, 😊 Great mood), Day (Exam/deadline, Party, 📚 Productive), Active (🏋️ Gym, ⚽ Football, 🏸 Racket), Chill (🎧 Chill). Sick, Stressed, Exam/deadline and Party are whole-day toggles (ci.tags). The rest are timed: each tap logs one at that time (ci.ev, same list as Moments), editable and removable; buttons show "×n".
+- **Timed effects (model v2 update):** crashed −8 easing over 3 h; great mood +4 / 3 h; productive +1 / 1 h then −3 (1–4 h); gym +5 / 1.5 h then −3 (2–5 h); football +5 / 1 h then −6 (1.5–5 h), −3 next morning; racket +5 / 1 h then −3 (1.5–4 h); chill +3 / 3 h. Any sport within 2 h before bedtime: −3 next morning. Sick also −4 next morning. All tags capped at ±15. Travel removed.
+- **Water:** football +750 ml, racket/gym +500 ml on that day's target.
+- **Removed:** Insights card, Trends processed-food share (stays on Nutrients), Targets hit, Weekdays vs weekends. Change history moved to "Target history" on Me.
+- **Foods:** Lay's Magic Masala and Uncle Chipps Spicy Treat, ₹20 pack = 48 g, NOVA 4.
