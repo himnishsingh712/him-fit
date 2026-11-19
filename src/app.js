@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.8.1';
+const APP_VERSION = '1.8.2';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -519,7 +519,7 @@ function viewCheckin() {
   { const ev = (ci.ev || []).slice().sort((a, b) => a.t - b.t);
     h += `<div class="card"><h2>Moments</h2><div class="btns c3"><button class="btn" data-act="evadd" data-id="hot">🚿 Hot shower</button><button class="btn" data-act="evadd" data-id="cool">🚿 Cool shower</button><button class="btn" data-act="evadd" data-id="spicy">🌶️ Spicy time</button></div>
       ${ev.length ? `<div class="list">${ev.map(x => `<div class="li"><div class="main"><div class="t">${EVN[x.k] || x.k}</div></div><input class="field" style="width:130px" type="time" value="${hhmm(x.t)}" data-act="evtime" data-id="${x.id}" aria-label="Time"><button class="iconbtn" data-act="evdel" data-id="${x.id}" aria-label="Remove">${ic('x',16)}</button></div>`).join('')}</div>` : ''}
-      <div class="muted small">Tap when it happens (or fix the time after). Recorded for now, not in the energy score yet — tested against your ratings on 16 Dec.</div></div>`; }
+      <div class="muted small">Tap when it happens (or fix the time after). Counts in your energy score right away — see the energy breakdown for how much.</div></div>`; }
   const drinks = ci.drinks || [];
   h += `<div class="card"><div class="row"><h2>Drinks</h2><button class="pill" data-act="adddrink">+ Add drink</button></div>${drinks.length ? `<div class="list">${drinks.map(dr => { const v = drinkVec(dr); return `<div class="li"><div class="main"><div class="t">${esc(drinkLabel(dr))}</div><div class="s">${fmt(v.kcal,'kcal')} kcal · ${dr.k === 'caf' ? Math.round(v.caf || 0) + ' mg caffeine' : (stdDrinks({ci:{drinks:[dr]}})).toFixed(1) + ' standard drinks'}${dr.t ? ' · ' + tlabel(dr.t) : ''}</div></div><button class="iconbtn" data-act="deldrink" data-id="${dr.id}" aria-label="Remove drink">${ic('x',18)}</button></div>`; }).join('')}</div><div class="muted small">Total ${stdDrinks(d).toFixed(1)} standard drinks (10 g alcohol each). Calories count toward your day.</div>` : `<div class="muted small">None logged. ${ci.drinks ? '' : '<button class="btn" data-act="nodrinks" style="height:36px;margin-left:6px">Log “none today”</button>'}</div>`}</div>`;
   h += `</div>`;
