@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.12.3';
+const APP_VERSION = '1.12.4';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -935,12 +935,15 @@ function viewMe() {
     ${tl('Weight', b.kg.toFixed(1) + ' kg', '7-day average')}
     ${tl('Body fat', b.bf != null ? b.bf.toFixed(1) + '%' : '—', b.bf != null ? `${bfBand(b.bf, p.sex)} · ${b.bfNavy != null ? 'Navy ' + b.bfNavy.toFixed(1) : ''}${b.bfNavy != null && b.bfRfm != null ? ' / ' : ''}${b.bfRfm != null ? 'RFM ' + b.bfRfm.toFixed(1) : ''} · ${shortDate(b.tape.k)}` : 'measure waist (+ neck)')}
     ${tl('FFMI', b.ffmiAdj != null ? b.ffmiAdj.toFixed(1) : '—', b.ffmiAdj != null ? ffmiBand(b.ffmiAdj) + ' · lean ' + b.lean.toFixed(1) + ' kg' : 'needs body fat')}
+    ${tl('BMR', fmt(b.bmrNow,'kcal'), 'kcal at full rest')}
     ${tl('Waist / height', b.whtr != null ? b.whtr.toFixed(2) : '—', b.whtr != null ? (b.whtr < 0.5 ? 'healthy, under 0.5' : 'above 0.5: belly fat risk') : 'needs waist')}
     ${tl('BMI', b.bmi.toFixed(1), bmiBand(b.bmi) + ' · ignores muscle')}</div></div>`;
-  h += physiqueCard(p, b);
-  h += tapeProgress();
-  const pct = Math.round(pl.blend * 100);
-  h += `<div class="card span2"><div class="row"><h2>Your calories, step by step</h2><span class="small muted">week of ${shortDate(pl.weekStart)}</span></div>
+  { const open = (S.meOpen || {}).tape; const last = (tapeSeries('waist').slice(-1)[0] || {}).k;
+    h += `<div class="card span2"><div class="row"><button class="linkish" data-act="meopen" data-id="tape"><h2 style="margin:0">Measurements ${open ? '▴' : '▾'}</h2><div class="small muted">${last ? 'last check ' + shortDate(last) : 'none yet'} · physique inside</div></button><button class="pill" data-act="tapeopen">Update</button></div></div>`;
+    if (open) { h += tapeProgress(); h += physiqueCard(p, b); } }
+  const pct = Math.round(pl.blend * 100); const cOpen = (S.meOpen || {}).cal;
+  h += `<div class="card span2"><div class="row"><button class="linkish" data-act="meopen" data-id="cal"><h2 style="margin:0">Your calories ${cOpen ? '▴' : '▾'}</h2><div class="small muted">${fmt(pl.targets.kcal,'kcal')} kcal a day · how it's worked out</div></button><a href="#" class="small muted" data-act="histsheet">Target history ›</a></div>`;
+  if (cOpen) h += `<div class="row"><span class="small muted">week of ${shortDate(pl.weekStart)}</span></div>
     <div class="steps">
       <div class="row"><span>BMR <span class="muted small">Mifflin–St Jeor at ${pl.kg.toFixed(1)} kg</span></span><b>${fmt(fm.bmr,'kcal')}</b></div>
       <div class="row"><span>× ${fm.base} daily movement <span class="muted small">${AMAP[p.activity].n.toLowerCase()}</span></span><b>${fmt(fm.bmr * fm.base,'kcal')}</b></div>
@@ -950,20 +953,10 @@ function viewMe() {
       <div class="bar" style="height:6px"><div style="width:${pct}%;background:var(--ok)"></div></div><div class="muted small">Using ${pct}% measured, ${100 - pct}% formula. Measured takes over as your data grows (100% at 28 days).</div>
       <div class="row"><span>= Maintenance used</span><b>${fmt(pl.maint,'kcal')}</b></div>
       <div class="row"><span>${pl.adj >= 0 ? '+' : '−'} ${GMAP[p.goal].n.toLowerCase()} at ${pl.pace >= 0 ? '+' : ''}${pl.pace} kg/week <span class="muted small">pace × 7,700 kcal ÷ 7</span></span><b>${pl.adj >= 0 ? '+' : '−'}${fmt(Math.abs(pl.adj),'kcal')}</b></div>
-      <div class="row big2"><span>Daily target</span><b>${fmt(pl.targets.kcal,'kcal')} kcal</b></div></div></div>`;
+      <div class="row big2"><span>Daily target</span><b>${fmt(pl.targets.kcal,'kcal')} kcal</b></div></div>`;
+  h += `</div>`;
   const tg = pl.targets; const tc = targetChange(k);
   if (tc) h += `<div class="flag info span2"><div><strong>This week:</strong> ${esc(tc.text)}</div></div>`;
-  h += `<div class="card span2"><div class="row"><span></span><a href="#" class="small muted" data-act="histsheet">Target history ›</a></div></div>`;
-  const eta = etaWeeks(p, b.kg, b.paceActual), etaPlan = etaWeeks(p, b.kg, pl.pace);
-  h += `<div class="card span2"><div class="row"><h2>Goal</h2><span class="chip ok">${esc(GMAP[p.goal].n)}</span></div><div class="tiles t3">
-    ${tl('Target', p.targetKg + ' kg', `${(p.targetKg - b.kg >= 0 ? '+' : '')}${(p.targetKg - b.kg).toFixed(1)} kg to go`)}
-    ${tl('Planned pace', (pl.pace >= 0 ? '+' : '') + pl.pace + ' kg', 'per week' + (etaPlan ? ` · ~${Math.ceil(etaPlan)} weeks` : ''))}
-    ${tl('Actual pace', b.paceActual != null ? (b.paceActual >= 0 ? '+' : '') + b.paceActual.toFixed(2) + ' kg' : '—', b.paceActual == null ? 'needs 5 weigh-ins over 7+ days' : 'per week · ' + (eta ? `~${Math.ceil(eta)} weeks to target` : eta === 0 ? 'at target' : 'moving away from target'))}</div></div>`;
-  h += `<div class="card span2"><h2>Profile</h2><div class="small" style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px">
-    <span class="muted">Activity</span><span>${esc(AMAP[p.activity].n)} · trains ${p.trainDays}×/week, ${p.sessionMin} min · ${{new:'under 1 yr', mid:'1–3 yrs', exp:'3+ yrs'}[p.experience]} lifting</span>
-    <span class="muted">Routine</span><span>wakes ${p.wake} · sleeps ${p.bed}</span>
-    <span class="muted">Diet</span><span>${{veg:'Vegetarian', egg:'Veg + eggs', nonveg:'Non-veg'}[p.diet]}</span></div>
-    <div class="row"><a href="#supplements" class="small" style="font-weight:600">Supplements and bloodwork</a><a href="#setup" class="small" style="font-weight:600">Edit profile</a></div></div>`;
   return h + '</div>';
 }
 
@@ -1149,6 +1142,7 @@ document.addEventListener('click', e => {
     case 'sleepend': sleepEnd(); break;
     case 'sleepundo': { e.preventDefault(); const c = CFG(); delete c.zz; saveConfig(c); toast('Undone'); break; }
     case 'energyinfo': e.preventDefault(); S.sheet = {type: 'energy'}; render(); break;
+    case 'meopen': S.meOpen = S.meOpen || {}; S.meOpen[id] = !S.meOpen[id]; render(); break;
     case 'histsheet': e.preventDefault(); S.sheet = {type: 'hist'}; render(); break;
     case 'dcat': { const c = el.dataset.id; Object.assign(S.sheet, c === 'alc' ? {cat: c, d: 'beer5', ml: 330, m: 'none', mml: 0} : {cat: c, d: CAFF.find(x => x.cat === c).id, shots: null, sugar: c === 'tea' ? 1 : 0, size: null}); if (c !== 'alc') { const cc = CMAP[S.sheet.d]; S.sheet.shots = cc.shots || null; S.sheet.size = cc.sizes ? cc.sizes[0] : null; } render(); break; }
     case 'cpick': { const cc = CMAP[id]; S.sheet.d = id; S.sheet.shots = cc.shots || null; S.sheet.size = cc.sizes ? cc.sizes[0] : null; S.sheet.sugar = id === 'chai' ? 1 : 0; render(); break; }
