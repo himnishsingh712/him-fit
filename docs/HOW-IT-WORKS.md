@@ -125,3 +125,7 @@ All raw logs are kept, so v1 and v2 can both be re-run over the same days on 16 
 - Quick-add row: "Repeat last meal" replaced by **😴 Going to sleep** → becomes **☀️ I'm awake** (with "Sleeping since … · Undo"). Pending start is kept in config (`zz`) so it survives closing the app and syncs.
 - On "I'm awake": under 10 min = not logged. **Night** if it started 8 PM–8 AM or lasted 5 h+; otherwise a **nap** (added to that day's naps). Night sleep is saved on the wake day as `ci.slp {s, e}`, sets that day's sleep hours, and pre-fills the morning questions (times still editable). If you forget the taps, the morning check-in works as before.
 - While asleep, today's energy curve ends at the tap time and the energy-check prompt is hidden.
+
+## v1.11.0 — Meals on Today, one place to add and fix food
+- Today's "Meals" card lists every meal with a **+**. Items show under their meal with their own **− / +** (− at the last step removes the item). Tap an item's name to change time or meal.
+- **+** opens the food list for that meal. Counters show what's already in **that meal** (not the day total); + adds, − removes, nothing changes until **Done** (e.g. "Done · Lunch: +1 roti, −2 paratha taco"). Removals come off the most recent entries of that food in that meal. Switching meal clears pending removals.
