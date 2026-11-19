@@ -15,14 +15,11 @@
 //  10 Naps: grogginess right after, a lift that fades over ~5 h, and they partly reset the 'hours awake' clock
 //  11 Moments (v2): cool shower lift, hot shower relax, 🌶️ relax
 //  12 Patterns (v2): late meal or late caffeine before last night's sleep, short sleep through the week, low-mood / bad-sleep streaks
-//  13 Heat (v2): Ahmedabad's average monthly high, afternoons, softened for fan + cooler
-//  14 Your energy checks (v2): your latest rating (last 4 h) pulls the curve toward what you said, fading out
+//  13 Your energy checks (v2): a gentle, sense-checked nudge toward your latest rating, on your own scale
 
 const H = 3600e3, MIN = 60e3;
 // v2 from 19 Nov 2026, frozen until 16 Dec 2026. All raw logs are kept, so v1 and v2 can both be re-run over the same days and scored against your ratings.
 export const MODEL_VERSION = 'v2';
-// Ahmedabad average daily high by month, °C (Jan–Dec), climate normals
-export const AMD_TMAX = [28, 31, 36, 40, 42, 38, 33, 32, 33, 35, 32, 29];
 // where each of your 1–5 ratings sits on the 0–100 scale (middle of each band)
 export const RATE_SCORE = [0, 20, 42, 57, 72, 88];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -176,13 +173,18 @@ export function energyAt(inp, t) {
   if (pt.weekShort > 0.5) add('pattern', 'week', `Short sleep earlier this week (${pt.weekShort.toFixed(1)} h/night under 7.5)`, -Math.min(5, 1.5 * pt.weekShort));
   if (pt.lowMoodDays >= 3) add('pattern', 'moodstreak', `Low mood ${pt.lowMoodDays} mornings running`, -3);
   if (pt.badSleepDays >= 3) add('pattern', 'sleepstreak', `Bad sleep ${pt.badSleepDays} nights running`, -3);
-  // ---- 13 heat
-  if (inp.heat) { const d = new Date(t), tmax = AMD_TMAX[d.getMonth()]; if (tmax > 34) add('heat', 'heat', `Ahmedabad heat (avg high ${tmax}°C)`, -Math.min(5, (tmax - 34) * 0.6) * hump(d.getHours() * 60 + d.getMinutes(), 11 * 60, 15 * 60, 20 * 60)); }
   let raw = 75 + R.reduce((s, x) => s + x.v, 0);
-  // ---- 14 your energy checks: pull toward your latest rating, 70% at the moment you rate, gone after 4 h
-  const rl = (inp.rates || []).filter(r => r.v && r.t <= t && t - r.t < 4 * H).sort((x, y) => y.t - x.t)[0];
+  // ---- 13 your energy checks: a nudge, not an override
+  //   your rating is read on your own scale (rateBias: how your ratings usually sit vs the model, after 10+ checks);
+  //   within 8 points of the model = no change; beyond that, 30% of the extra gap, capped at ±10, fading to 0 over 3 h;
+  //   half the pull when the model has strong reasons (score ≤40 or ≥80) and your rating points the other way
+  const rl = (inp.rates || []).filter(r => r.v && r.t <= t && t - r.t < 3 * H).sort((x, y) => y.t - x.t)[0];
   if (rl) { const cache = inp._rbase || (inp._rbase = {}); const base = cache[rl.t] ?? (cache[rl.t] = energyAt({...inp, rates: []}, rl.t).score);
-    const wgt = 0.7 * (1 - (t - rl.t) / (4 * H)); const v = wgt * (RATE_SCORE[rl.v] - base);
+    const target = RATE_SCORE[rl.v] - (inp.rateBias || 0), gap = target - base, DZ = 8;
+    let pull = Math.abs(gap) <= DZ ? 0 : 0.3 * (gap - Math.sign(gap) * DZ);
+    if ((base <= 40 && gap > 0) || (base >= 80 && gap < 0)) pull *= 0.5;
+    pull = clamp(pull, -10, 10);
+    const v = pull * (1 - (t - rl.t) / (3 * H));
     add('you', 'rate', `You said ${['', 'Awful', 'Low', 'Okay', 'Good', 'Great'][rl.v]} at ${new Date(rl.t).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}`, v); raw += Math.abs(v) >= 0.05 ? v : 0; }
   return {t, score: clamp(Math.round(raw), 5, 98), parts: R, asleep};
 }

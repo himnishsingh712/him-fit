@@ -109,3 +109,7 @@ New layers on top of v1 (v1 layers unchanged):
 - **Heat:** Ahmedabad monthly average high (Jan–Dec 28,31,36,40,42,38,33,32,33,35,32,29 °C); above 34 °C: −0.6 per °C (max −5) on an 11 AM–8 PM hump peaking 3 PM. Fan and cooler assumed. Zero Oct–Feb.
 - **Your energy checks:** the latest rating in the last 4 h pulls the score toward the rating's band middle (Awful 20, Low 42, Okay 57, Good 72, Great 88): 70% at the rating time, linearly to 0 at 4 h. The stored daily prediction (ePred) is computed without ratings, so it stays a fair test.
 All raw logs are kept, so v1 and v2 can both be re-run over the same days on 16 Dec and scored against the ratings.
+
+## v1.8.1 — Heat removed, gentler energy checks (still model v2, frozen until 16 Dec)
+- Heat layer removed (user's call).
+- Energy checks are a nudge, not an override: target = your rating's band middle minus your personal bias (mean of rating score − model score over your last 30 checks, once there are 10+; each check now stores the model's score at that moment as `m`). Within ±8 of the model: no change. Beyond: 30% of the gap past 8, halved if the model is ≤40 and you rated higher or ≥80 and you rated lower, capped ±10, fading linearly to 0 over 3 h. Stored predictions still exclude it.
