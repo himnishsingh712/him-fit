@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.12.0';
+const APP_VERSION = '1.12.1';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -1107,6 +1107,8 @@ function render() {
   window.scrollTo(0, sy);
 }
 function route() { if (!S.user) { render(); return; } if (location.hash !== '#log') { S.meal = null; S.logTime = null; S.cart = {}; } const v = location.hash.replace('#', ''); S.view = VIEWS[v] ? v : 'today'; if (!PROF() && !S.skipSetup && S.view !== 'setup') { S.view = 'setup'; S.autoSetup = true; startSetup(); } if (S.view === 'setup' && !S.pf) startSetup(); S.open = null; S.openMeal = null; render(); window.scrollTo(0, 0); }
+// green outline on the field (or row) that was just saved, after the re-render
+function okMark(sel) { setTimeout(() => { const e = document.querySelector(sel); if (!e) return; e.classList.add('saved'); setTimeout(() => e.classList.remove('saved'), 1600); }, 30); }
 let toastT; function toast(m) { S.toast = m; clearTimeout(toastT); toastT = setTimeout(() => { S.toast = null; render(); }, 1800); render(); }
 
 // ================= events =================
@@ -1125,7 +1127,7 @@ document.addEventListener('click', e => {
     case 'itemsauce': { const it = d.items.find(x => x.id === id); if (it) { it.o = {...(it.o || {}), [el.dataset.k]: n}; touch(k); } break; }
     case 'rate': { const dd = day(todayKey()); dd.ci = dd.ci || {}; dd.ci.er = (dd.ci.er || []).filter(r => r.s !== n); let m = null; try { m = energyFor(todayKey(), Date.now(), {noRates: true}).cur.score; } catch (er) {} dd.ci.er.push({s: n, v: +el.dataset.v, t: Date.now(), m}); touch(todayKey()); toast('Thanks — noted'); break; }
     case 'rateskip': { e.preventDefault(); const dd = day(todayKey()); dd.ci = dd.ci || {}; dd.ci.er = (dd.ci.er || []).filter(r => r.s !== n); dd.ci.er.push({s: n, v: null, t: Date.now()}); touch(todayKey()); break; }
-    case 'evadd': { d.ci = d.ci || {}; d.ci.ev = d.ci.ev || []; const t = k === todayKey() ? Date.now() : mealTime(k, 'esnack'); d.ci.ev.push({id: uid(), k: id, t}); touch(k); toast(`Logged ${EVN[id] || TIMED[id]} at ${tlabel(t)}`); break; }
+    case 'evadd': { d.ci = d.ci || {}; d.ci.ev = d.ci.ev || []; const t = k === todayKey() ? Date.now() : mealTime(k, 'esnack'); const nid = uid(); d.ci.ev.push({id: nid, k: id, t}); touch(k); toast(`✓ ${EVN[id] || TIMED[id]} logged · ${tlabel(t)} · tap again to add another`); okMark(`[data-act=evtime][data-id="${nid}"]`); break; }
     case 'evdel': { d.ci.ev = (d.ci?.ev || []).filter(x => x.id !== id); touch(k); break; }
     case 'param': { const f = FMAP[id]; const c = S.cart[id]; const pk = f.param.key; c.o[pk] = Math.min(f.param.max, Math.max(f.param.min, (c.o[pk] ?? f.param.def) + n)); render(); break; }
     case 'dosa': { const m = el.dataset.m; const c = S.cart.dosa || (S.cart.dosa = {q: 0, o: {}}); if (m === 'n') { S.dosaMode = 'n'; c.q = Math.max(c.q, 1); } else { S.dosaMode = null; c.q = c.q === +m ? 0 : +m; } render(); break; }
@@ -1133,7 +1135,7 @@ document.addEventListener('click', e => {
     case 'stdday': { const now = Date.now(); STANDARD_DAY.forEach(s => d.items.push({id: uid(), f: s.f, q: s.q, o: s.o || {}, t: now, m: STD_MEAL[s.f] || 'breakfast'})); touch(k); toast('Standard day added'); location.hash = '#today'; break; }
     case 'edititem': S.sheet = {type: 'item', id}; render(); break;
     case 'itemq': { const it = d.items.find(x => x.id === id); if (!it) break; const st = stepOf(it.f); const dq = it.q > 1 || n > 0 ? n : -st; const q = Math.round((it.q + dq) / st) * st;
-      if (q <= 0) { d.items = d.items.filter(x => x.id !== id); if (S.sheet?.id === id) S.sheet = null; toast(`Removed ${FMAP[it.f]?.name || 'item'}`); } else it.q = q; touch(k); break; }
+      if (q <= 0) { d.items = d.items.filter(x => x.id !== id); if (S.sheet?.id === id) S.sheet = null; toast(`Removed ${FMAP[it.f]?.name || 'item'}`); } else { it.q = q; if (S.sheet?.id === id) { toast(`✓ Updated · ${fq(q)}`); okMark(`[data-act=itemqset][data-id="${id}"]`); } } touch(k); break; }
     case 'itemp': { const it = d.items.find(x => x.id === id); const f = it && FMAP[it.f]; if (f?.param) { it.o = it.o || {}; it.o[f.param.key] = Math.min(f.param.max, Math.max(f.param.min, (it.o[f.param.key] ?? f.param.def) + n)); touch(k); } break; }
     case 'meal': S.meal = id; Object.keys(S.cart).forEach(f => { if (S.cart[f].q < 0) delete S.cart[f]; }); render(); break;
     case 'logmeal': S.meal = id; break;
@@ -1172,7 +1174,7 @@ document.addEventListener('click', e => {
       tapeFields().forEach(([f]) => { const v = num(sh.vals[f]); if (v && v !== sh.orig[f]) { dd.ci[f] = Math.round(v * IN * 10) / 10; n2++; } });
       S.sheet = null; if (n2) { touch(dk); toast(`${n2} measurement${n2 > 1 ? 's' : ''} saved for ${shortDate(dk)}`); } else { render(); toast('Nothing changed'); } break; }
     case 'openmeal': S.openMeal = S.openMeal === id ? null : id; render(); break;
-    case 'itemmeal': { const it = d.items.find(x => x.id === el.dataset.item); if (it) { it.m = id; touch(k); } break; }
+    case 'itemmeal': { const it = d.items.find(x => x.id === el.dataset.item); if (it) { it.m = id; touch(k); toast(`✓ Moved to ${MEALN[id]}`); } break; }
     case 'delitem': d.items = d.items.filter(x => x.id !== id); S.sheet = null; touch(k); toast('Removed'); break;
     case 'closesheet': S.sheet = null; render(); break;
     case 'cistep': { d.ci = d.ci || {}; const f = id; if (f === 'hits') { addHit(k, n); break; } const step = +(el.dataset.step || 1); const cur = d.ci[f]; d.ci[f] = cur == null ? (f === 'sl' ? 7 : Math.max(0, n)) : Math.min(f === 'sl' ? 16 : 999, Math.max(0, Math.round((cur + n * step) * 10) / 10)); touch(k); break; }
@@ -1197,14 +1199,14 @@ document.addEventListener('change', e => {
   const el = e.target; const act = el.dataset.act; if (!act) return;
   const k = S.date, d = day(k);
   if (act === 'supp') { d.supp = d.supp || {}; d.supp[el.dataset.id] = el.checked; touch(k); }
-  if (act === 'ci') { d.ci = d.ci || {}; const f = el.dataset.f; const v = el.value === '' ? null : +el.value; if (v == null || isNaN(v)) { delete d.ci[f]; if (f === 'w') delete d.ci.wt; } else { d.ci[f] = v; if (f === 'w') d.ci.wt = k === todayKey() ? Date.now() : atClock(k, (PROF()?.wake || '09:00'), false); } touch(k); }
+  if (act === 'ci') { d.ci = d.ci || {}; const f = el.dataset.f; const v = el.value === '' ? null : +el.value; if (v == null || isNaN(v)) { delete d.ci[f]; if (f === 'w') delete d.ci.wt; } else { d.ci[f] = v; if (f === 'w') d.ci.wt = k === todayKey() ? Date.now() : atClock(k, (PROF()?.wake || '09:00'), false); } touch(k); if (f === 'w' && v != null && !isNaN(v)) { toast(`✓ Weight saved · ${v} kg`); okMark('[data-act=ci][data-f=w]'); } }
   if (act === 'tapein') { d.ci = d.ci || {}; const f = el.dataset.f; const v = el.value === '' ? null : +el.value; if (v == null || isNaN(v)) delete d.ci[f]; else d.ci[f] = Math.round(v * IN * 10) / 10; touch(k); }
-  if (act === 'sleeptime') { d.ci = d.ci || {}; const mc = d.ci.mc && !d.ci.mc.skipped ? d.ci.mc : (d.ci.mc = {bed: PROF()?.bed || '01:00', wake: PROF()?.wake || '09:00', t: Date.now()}); mc[el.dataset.f] = el.value; const sl = Math.round((atClock(k, mc.wake, false) - bedMs(k, mc.bed)) / 3600e3 * 4) / 4; if (sl > 0 && sl < 16) d.ci.sl = sl; touch(k); }
+  if (act === 'sleeptime') { d.ci = d.ci || {}; const mc = d.ci.mc && !d.ci.mc.skipped ? d.ci.mc : (d.ci.mc = {bed: PROF()?.bed || '01:00', wake: PROF()?.wake || '09:00', t: Date.now()}); mc[el.dataset.f] = el.value; const sl = Math.round((atClock(k, mc.wake, false) - bedMs(k, mc.bed)) / 3600e3 * 4) / 4; if (sl > 0 && sl < 16) d.ci.sl = sl; touch(k); toast(`✓ Sleep saved${sl > 0 && sl < 16 ? ' · ' + fmtH(sl) : ''}`); okMark(`[data-act=sleeptime][data-f=${el.dataset.f}]`); }
   if (act === 'cartset') { const id = el.dataset.id, base = +el.dataset.base || 0; const c = S.cart[id] || (S.cart[id] = {q: 0, o: {...sauceDefaults(FMAP[id])}}); c.q = Math.max(-base, roundStep(el.value, stepOf(id)) - base); if (FMAP[id].param && !c.o[FMAP[id].param.key]) c.o[FMAP[id].param.key] = FMAP[id].param.def; if (id === 'dosa' && c.q) S.dosaMode = 'n'; render(); }
-  if (act === 'itemqset') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it) { it.q = Math.max(stepOf(it.f), roundStep(el.value, stepOf(it.f)) || it.q); touch(k); } }
-  if (act === 'evtime') { const x = (d.ci?.ev || []).find(y => y.id === el.dataset.id); if (x && el.value) { x.t = atClock(k, el.value); touch(k); } }
+  if (act === 'itemqset') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it) { it.q = Math.max(stepOf(it.f), roundStep(el.value, stepOf(it.f)) || it.q); touch(k); toast(`✓ Updated · ${fq(it.q)}`); okMark(`[data-act=itemqset][data-id="${it.id}"]`); } }
+  if (act === 'evtime') { const x = (d.ci?.ev || []).find(y => y.id === el.dataset.id); if (x && el.value) { x.t = atClock(k, el.value); touch(k); toast(`✓ Time changed to ${tlabel(x.t)}`); okMark(`[data-act=evtime][data-id="${x.id}"]`); } }
   if (act === 'logtime') { S.logTime = el.value || null; }
-  if (act === 'itemtime') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it && el.value) { it.t = atClock(k, el.value); touch(k); } }
+  if (act === 'itemtime') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it && el.value) { it.t = atClock(k, el.value); touch(k); toast('✓ Updated · time ' + tlabel(it.t)); okMark(`[data-act=itemtime][data-id="${it.id}"]`); } }
   if (act === 'dtime') { S.sheet.time = el.value; }
   if (act === 'dml') { S.sheet.ml = Math.max(0, +el.value || 0); render(); }
   if (act === 'mml') { S.sheet.mml = Math.max(0, +el.value || 0); render(); }

@@ -134,3 +134,6 @@ All raw logs are kept, so v1 and v2 can both be re-run over the same days on 16 
 - Today no longer lists meals (calories/protein snapshot stays).
 - The orange + opens **Meals**: every meal with a +, and one line per food under it (kcal · protein). Tap a line to change amount, time or meal, or remove it. Caffeine drinks listed below with ✕.
 - A meal's + opens **Add to <meal>**: no meal buttons, no time field; counters always start at 0 (add only); coffee/tea/energy drinks and "Repeat yesterday's <meal>" are at the top. Food is saved at the time you add it (past days: the meal's usual time). Done returns to Meals.
+
+## v1.12.1 — Save confirmations
+A short "✓ …" message plus a green outline on the field for: weight, sleep times, tapping a timed tag or Moment ("tap again to add another"), editing a time in the Moments/tags list, and changing amount, time or meal in the food editor. Places that already show a change (lit buttons, moving bars, disappearing rows) are unchanged.

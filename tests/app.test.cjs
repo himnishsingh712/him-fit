@@ -71,7 +71,8 @@ const go = async h => { w.location.hash = h; await wait(40); };
   await go('#checkin');
   ok('no sleep-hours stepper', !$('[data-act=cistep][data-id=sl]'));
   ok('sleep shows times', $$('[data-act=sleeptime]').length === 2);
-  click('[data-act=evadd][data-id=spicy]'); await wait(10); click('[data-act=evadd][data-id=cool]'); await wait(10);
+  click('[data-act=evadd][data-id=spicy]'); await wait(10);
+  ok('moment shows a clear confirmation', doc.body.textContent.includes('logged ·') && doc.body.textContent.includes('tap again to add another')); click('[data-act=evadd][data-id=cool]'); await wait(10);
   ok('moments logged in check-in', doc.body.textContent.includes('Spicy time') && $$('[data-act=evdel]').length === 2);
   click('[data-act=evdel]'); await wait(10); ok('moment removed', $$('[data-act=evdel]').length === 1);
   if (new Date().getHours() >= 10) {
@@ -83,6 +84,7 @@ const go = async h => { w.location.hash = h; await wait(40); };
     await go('#checkin');
   }
   setv('[data-act=ci][data-f=w]', '69.5'); await wait(20);
+  ok('weight shows a saved confirmation', doc.body.textContent.includes('✓ Weight saved · 69.5 kg'));
   ok('weight note shows correction rule', doc.body.textContent.includes('counts as'), '');
   ok('no tape card in check-in', !doc.body.textContent.includes('Tape measure'));
   ok('day tags: 4 whole-day + 7 timed', $$('[data-act=daytag]').length === 4 && $$('.chipbtn[data-act=evadd]').length === 7);
