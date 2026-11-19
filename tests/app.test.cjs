@@ -78,7 +78,7 @@ const go = async h => { w.location.hash = h; await wait(40); };
   ok('nap added and counted in sleep', doc.body.textContent.includes('4 h today') && doc.body.textContent.includes('with naps'), txt('.card .muted.small'));
   await go('#energy');
   ok('day split into thirds', ['Early day','Midday','Late day'].every(x => doc.body.textContent.includes(x)) && !$$('.ph .l').some(e => e.textContent === 'Afternoon'), $$('.ph .l').map(e => e.textContent).join());
-  ok('energy screen with breakdown', $('.ecard') && doc.body.textContent.includes('Day tags') && doc.body.textContent.includes('model v1'));
+  ok('energy screen with breakdown', $('.ecard') && doc.body.textContent.includes('Day tags') && doc.body.textContent.includes('model v2'));
   const lastItem = () => { const ds = JSON.parse(w.localStorage.getItem(Object.keys(w.localStorage).find(x => x.endsWith(':days'))) || '{}'); const its = Object.values(ds).flatMap(d => d.items || []); return its[its.length - 1]; };
   await go('#log'); ok('log screen has a time field', !!$('[data-act=logtime]'));
   click('[data-act=meal][data-id=breakfast]'); await wait(5); click('[data-act=cart][data-id=banana][data-n="1"]'); await wait(5); click('[data-act=addcart]'); await wait(60);

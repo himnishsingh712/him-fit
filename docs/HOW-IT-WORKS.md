@@ -101,3 +101,11 @@ The Log screen has a "Time eaten" field. Today it starts at the current time; on
 - **Day thirds:** the three tiles are Early day / Midday / Late day — your waking day (wake to bedtime) cut into equal thirds, with the time range under each. The part you're in shows "so far" (only hours already lived); later parts show "forecast".
 - **Moments (Check-in):** 🚿 Hot shower, 🚿 Cool shower, 🌶️ Spicy time — tap when it happens, time editable, removable. Saved as ci.ev [{id, k, t}]. Shown as markers on the chart. Not in the score: tested against ratings on 16 Dec, together with heat (from historical Ahmedabad weather, nothing recorded daily).
 - The score's maths (model v1) is unchanged.
+
+## v1.8.0 — Energy model v2 (19 Nov 2026, frozen until 16 Dec)
+New layers on top of v1 (v1 layers unchanged):
+- **Moments:** cool shower +7 (peak 5 min, gone 75 min); hot shower +3 for 20 min then −4 (peak 50 min, gone 110 min); 🌶️ +3 for 20 min then −7 (peak 45 min, gone 2 h).
+- **Patterns:** last meal (≥100 kcal) <2 h before bed −3 next morning (<1 h −5); caffeine level at bedtime >40 mg → −level/20 (max −6); both ×0.5 when the morning report is answered, fading by 6 h / 8 h awake. Nights 4–7 back: mean shortfall under 7.5 h × 1.5 (max −5) all day. Low mood (Low/Irritable) or bad sleep (Terrible/Poor) 3+ mornings running: −3 each.
+- **Heat:** Ahmedabad monthly average high (Jan–Dec 28,31,36,40,42,38,33,32,33,35,32,29 °C); above 34 °C: −0.6 per °C (max −5) on an 11 AM–8 PM hump peaking 3 PM. Fan and cooler assumed. Zero Oct–Feb.
+- **Your energy checks:** the latest rating in the last 4 h pulls the score toward the rating's band middle (Awful 20, Low 42, Okay 57, Good 72, Great 88): 70% at the rating time, linearly to 0 at 4 h. The stored daily prediction (ePred) is computed without ratings, so it stays a fair test.
+All raw logs are kept, so v1 and v2 can both be re-run over the same days on 16 Dec and scored against the ratings.

@@ -13,10 +13,18 @@
 //   8 Cannabis: short lift, longer couch phase, heavy-day fog, next-morning fog; scaled by tolerance
 //   9 Day tags: sick, stressed, travel, exam, party (and yesterday's party)
 //  10 Naps: grogginess right after, a lift that fades over ~5 h, and they partly reset the 'hours awake' clock
+//  11 Moments (v2): cool shower lift, hot shower relax, 🌶️ relax
+//  12 Patterns (v2): late meal or late caffeine before last night's sleep, short sleep through the week, low-mood / bad-sleep streaks
+//  13 Heat (v2): Ahmedabad's average monthly high, afternoons, softened for fan + cooler
+//  14 Your energy checks (v2): your latest rating (last 4 h) pulls the curve toward what you said, fading out
 
 const H = 3600e3, MIN = 60e3;
-// Frozen until 16 Dec 2026 so predictions can be compared fairly with your ratings. Change one layer at a time after that.
-export const MODEL_VERSION = 'v1';
+// v2 from 19 Nov 2026, frozen until 16 Dec 2026. All raw logs are kept, so v1 and v2 can both be re-run over the same days and scored against your ratings.
+export const MODEL_VERSION = 'v2';
+// Ahmedabad average daily high by month, °C (Jan–Dec), climate normals
+export const AMD_TMAX = [28, 31, 36, 40, 42, 38, 33, 32, 33, 35, 32, 29];
+// where each of your 1–5 ratings sits on the 0–100 scale (middle of each band)
+export const RATE_SCORE = [0, 20, 42, 57, 72, 88];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // piecewise-linear interpolation over [[x, y], ...] (sorted by x); flat beyond the ends
 export function interp(pts, x) {
@@ -156,7 +164,26 @@ export function energyAt(inp, t) {
   if (tg.includes('exam')) add('tags', 'exam', a < 8 ? 'Exam adrenaline' : 'After the exam', a < 8 ? 4 : -4);
   if (tg.includes('party') && a >= 10) add('tags', 'party', 'Party night', 4);
   if ((inp.yTags || []).includes('party')) add('tags', 'yparty', "Last night's party", -6 * clamp(1 - a / 6, 0, 1));
-  const raw = 75 + R.reduce((s, x) => s + x.v, 0);
+  // ---- 11 moments
+  (inp.events || []).forEach(ev => { const mm = (t - ev.t) / MIN; if (mm < 0 || mm > 180) return;
+    if (ev.k === 'cool') add('moments', 'cool', 'Cool shower', 7 * hump(mm, 0, 5, 75));
+    if (ev.k === 'hot') add('moments', 'hot', 'Hot shower (fresh, then relaxed)', 3 * hump(mm, 0, 5, 25) - 4 * hump(mm, 20, 50, 110));
+    if (ev.k === 'spicy') add('moments', 'spicy', '🌶️ (lift, then relaxed)', 3 * hump(mm, 0, 5, 25) - 7 * hump(mm, 15, 45, 120)); });
+  // ---- 12 patterns
+  const pt = inp.pattern || {}; const half = inp.report ? 0.5 : 1; // your sleep-quality answer already carries part of this
+  if (pt.lateMealH != null && pt.lateMealH < 2) add('pattern', 'latemeal', `Ate ${pt.lateMealH < 1 ? 'under 1 h' : 'under 2 h'} before bed last night`, -(pt.lateMealH < 1 ? 5 : 3) * half * clamp(1 - a / 6, 0, 1));
+  if (pt.bedCaf > 40) add('pattern', 'latecaf', `Caffeine still in you at bedtime (~${Math.round(pt.bedCaf)} mg)`, -Math.min(6, pt.bedCaf / 20) * half * clamp(1 - a / 8, 0, 1));
+  if (pt.weekShort > 0.5) add('pattern', 'week', `Short sleep earlier this week (${pt.weekShort.toFixed(1)} h/night under 7.5)`, -Math.min(5, 1.5 * pt.weekShort));
+  if (pt.lowMoodDays >= 3) add('pattern', 'moodstreak', `Low mood ${pt.lowMoodDays} mornings running`, -3);
+  if (pt.badSleepDays >= 3) add('pattern', 'sleepstreak', `Bad sleep ${pt.badSleepDays} nights running`, -3);
+  // ---- 13 heat
+  if (inp.heat) { const d = new Date(t), tmax = AMD_TMAX[d.getMonth()]; if (tmax > 34) add('heat', 'heat', `Ahmedabad heat (avg high ${tmax}°C)`, -Math.min(5, (tmax - 34) * 0.6) * hump(d.getHours() * 60 + d.getMinutes(), 11 * 60, 15 * 60, 20 * 60)); }
+  let raw = 75 + R.reduce((s, x) => s + x.v, 0);
+  // ---- 14 your energy checks: pull toward your latest rating, 70% at the moment you rate, gone after 4 h
+  const rl = (inp.rates || []).filter(r => r.v && r.t <= t && t - r.t < 4 * H).sort((x, y) => y.t - x.t)[0];
+  if (rl) { const cache = inp._rbase || (inp._rbase = {}); const base = cache[rl.t] ?? (cache[rl.t] = energyAt({...inp, rates: []}, rl.t).score);
+    const wgt = 0.7 * (1 - (t - rl.t) / (4 * H)); const v = wgt * (RATE_SCORE[rl.v] - base);
+    add('you', 'rate', `You said ${['', 'Awful', 'Low', 'Okay', 'Good', 'Great'][rl.v]} at ${new Date(rl.t).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}`, v); raw += Math.abs(v) >= 0.05 ? v : 0; }
   return {t, score: clamp(Math.round(raw), 5, 98), parts: R, asleep};
 }
 
