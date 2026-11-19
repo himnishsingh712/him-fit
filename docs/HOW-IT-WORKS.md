@@ -87,3 +87,7 @@ Six spots, whenever you like (Me tab → Measurements → Update measurements, w
 - Body fat = average of the US Navy method (waist + neck) and Relative Fat Mass (RFM = 64 − 20 × height ÷ waist for men, 76 − … for women). Both are shown. Lean mass and FFMI use the average.
 - Measurements card on Me: each spot's change since the first measurement, plus waist-per-kg: cm of waist gained per kg gained. ≤0.7 mostly lean, 0.7–1.0 watch, >1.0 the surplus is too big.
 - No reminder: measure whenever you choose.
+
+## v1.6.0 — Outside foods and taco sauces
+- **Outside foods** (new "Outside food" group at the bottom of Your foods): Domino's and Pizza Hut medium Margherita per slice (6 slices = whole), garlic breadsticks per serve, cheesy dip, Pizza Hut garlic bread cheese and loaded bread stix per order, Sadak Chaap dal makhani per ~500 ml box (quarter steps), butter naan / rumali / butter tandoori roti per piece, Tea Post mini kachori per order of 4 (¼ = 1 piece). Values per portion, from claude/outside-foods-database.md (official brand data where available, HealthifyMe-checked).
+- **Taco sauces:** each sauce (ketchup, chipotle, mustard) is None / 1 tsp / 2 tsp per taco, 1 tsp = 5 g. Default is 1 tsp of each (the normal recipe) every time; the choice is stored on that entry only and can be changed later from the item sheet. Old entries count as 1 tsp of each, same as before.

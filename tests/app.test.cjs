@@ -40,8 +40,15 @@ const go = async h => { w.location.hash = h; await wait(40); };
   await go('#log'); ok('standard-day button removed', !$('[data-act=stdday]'));
   click('[data-act=cart][data-id=taco][data-n="1"]'); await wait(5); click('[data-act=cart][data-id=taco][data-n="1"]'); await wait(5);
   ok('add button counts new items', txt('[data-act=addcart]').startsWith('Add 2'));
+  ok('taco shows three sauce choices', $$('[data-act=sauce][data-id=taco]').length === 9);
+  const kc0 = +txt('[data-act=addcart]').match(/· ([\d,]+) kcal/)[1].replace(',', '');
+  click('[data-act=sauce][data-k=mustard][data-n="0"]'); await wait(5); click('[data-act=sauce][data-k=chipotle][data-n="0"]'); await wait(5); click('[data-act=sauce][data-k=ketchup][data-n="2"]'); await wait(5);
+  const kc1 = +txt('[data-act=addcart]').match(/· ([\d,]+) kcal/)[1].replace(',', '');
+  ok('sauce choice changes calories (2 tacos: −2×(13+4) +2×6.75 ≈ −20)', kc0 - kc1 >= 17 && kc0 - kc1 <= 23, kc0 + ' → ' + kc1);
+  ok('outside food section with pizzas', doc.body.textContent.includes('Outside food') && !!$('[data-act=cart][data-id=domslice]') && doc.body.textContent.includes('6 slices = whole'));
   click('[data-act=addcart]'); await wait(60);
   ok('back on Today with the meal', $$('.mealrow').length === 1, $$('.mealrow').length);
+  ok('taco label shows ketchup only', txt('.mealrow .s').includes('ketchup ×2 only'), txt('.mealrow .s'));
   click('[data-act=qrepeat]'); await wait(40);
   ok('repeat last meal adds items', txt('.mealrow .s').includes('Paratha taco × 2, Paratha taco × 2') || $$('.mealrow').length >= 1);
   for (let i = 0; i < 6; i++) { click('[data-act=qhit]'); await wait(5); }

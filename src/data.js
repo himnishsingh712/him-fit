@@ -85,12 +85,26 @@ export const ING = {
   redbull:  {name:'Red Bull (India label)', nova:4, v:{kcal:46,c:11,sug:11,na:40,b2:0.2,b3:2.4,caf:30,tau:400}},
   monster:  {name:'Monster Energy (India label)', nova:4, v:{kcal:47,c:12,sug:11,na:80,b3:2.5,b6:0.34,caf:30,tau:400}},
   hell:     {name:'Hell Energy Classic (India label)', nova:4, v:{kcal:46,c:11,sug:11,na:40,b2:0.2,b3:2.4,caf:30,tau:400}},
+  // Outside foods: values are PER PORTION (use 100 in parts = 1 portion). See project doc outside-foods-database.md
+  domslice: {name:"Domino's Margherita, medium New Hand Tossed (1 slice)", nova:3, v:{kcal:195,p:9.6,c:28.9,sug:0.92,fib:1.1,f:4.6,sat:3,chol:17,na:383,k:99,ca:118,mg:14,fe:0.59,zn:0.9,ph:117,se:14.6,vA:43,vD:0.09,vE:0.6,vK:1.7,vC:0.72,b1:0.05,b2:0.08,b3:0.6,b6:0.04,fol:12,b12:0.51,cho:8}},
+  domsticks: {name:"Domino's Garlic Breadsticks (1 serve)", nova:3, v:{kcal:144,p:2.9,c:20.9,sug:0.08,fib:0.75,f:3.9,sat:1.3,chol:4,na:244,k:33,ca:6,mg:6,fe:0.34,zn:0.2,ph:31,se:9.3,vA:14,vD:0.03,vE:0.46,vK:0.42,vC:0.31,b1:0.03,b2:0.01,b3:0.34,b6:0.02,fol:7,b12:0,cho:3}},
+  domdip: {name:"Domino's Cheesy Dip (1)", nova:4, v:{kcal:55,p:0.75,c:2.3,sug:0.5,fib:0,f:4.8,sat:2,chol:0,na:250,k:0,ca:20,mg:0,fe:0,zn:0,ph:30,se:0,vA:10,vD:0,vE:0,vK:0,vC:0,b1:0,b2:0,b3:0,b6:0,fol:0,b12:0.05,cho:0}},
+  phslice: {name:'Pizza Hut Margherita, medium Pan (1 slice)', nova:3, v:{kcal:230,p:10.1,c:32.2,sug:0.93,fib:1.3,f:6.7,sat:2.5,chol:17,na:453,k:105,ca:119,mg:15,fe:0.66,zn:0.94,ph:123,se:16.7,vA:43,vD:0.09,vE:1.3,vK:2.1,vC:0.72,b1:0.06,b2:0.08,b3:0.68,b6:0.04,fol:13,b12:0.51,cho:8}},
+  phgbc: {name:'Pizza Hut Garlic Bread Cheese (1 order, 136 g)', nova:3, v:{kcal:494,p:10.4,c:54.8,sug:1.7,fib:1.5,f:31.7,sat:26.7,chol:58,na:1731,k:84,ca:89,mg:15,fe:0.73,zn:0.81,ph:116,se:20.4,vA:176,vD:0.39,vE:0.57,vK:2,vC:0.93,b1:0.07,b2:0.06,b3:0.66,b6:0.06,fol:15,b12:0.36,cho:12}},
+  phstix: {name:'Pizza Hut Loaded Bread Stix (1 order, 210 g)', nova:4, v:{kcal:673,p:16.4,c:113.2,sug:8.1,fib:3.8,f:18.3,sat:3.2,chol:0,na:1301,k:162,ca:42,mg:32,fe:1.7,zn:1,ph:180,se:47.9,vA:8,vD:0,vE:2.5,vK:1.6,vC:0.93,b1:0.17,b2:0.06,b3:1.8,b6:0.09,fol:36,b12:0.04,cho:15}},
+  dalmak: {name:'Sadak Chaap Dal Makhani (~500 ml box, ≈520 g)', nova:3, v:{kcal:755,p:25.6,c:67.1,sug:7.5,fib:19.3,f:45,sat:24.6,chol:114,na:2300,k:1121,ca:159,mg:167,fe:6.3,zn:3,ph:497,se:6.7,vA:367,vD:0.67,vE:3.3,vK:13.2,vC:10.7,b1:0.32,b2:0.23,b3:2.6,b6:0.38,fol:311,b12:0.16,cho:106}},
+  naan: {name:'Butter naan (1 piece, ~92 g)', nova:3, v:{kcal:322,p:8.37,c:48.39,sug:1.47,fib:1.47,f:10.58,sat:3.77,chol:15,na:326,k:72,ca:18,mg:13,fe:0.66,zn:0.43,ph:68,se:18.86,vA:46,vD:0.09,vE:0.55,vK:0.8,vC:0,b1:0.06,b2:0.04,b3:0.69,b6:0.02,fol:15,b12:0.04,cho:8}},
+  rumali: {name:'Rumali roti (1 piece, ~54 g)', nova:3, v:{kcal:98,p:3,c:19.7,sug:0.08,fib:1.6,f:0.7,sat:0.13,chol:0,na:123,k:35,ca:4,mg:9,fe:0.37,zn:0.23,ph:35,se:9.38,vA:0,vD:0,vE:0.18,vK:0.19,vC:0,b1:0.04,b2:0.01,b3:0.42,b6:0.02,fol:7,b12:0,cho:4}},
+  tandroti: {name:'Butter tandoori roti (1 piece, ~55 g)', nova:3, v:{kcal:180,p:5.55,c:30.14,sug:0.17,fib:4.5,f:5.23,sat:2.83,chol:12,na:365,k:153,ca:16,mg:58,fe:1.47,zn:1.05,ph:151,se:25.85,vA:36,vD:0.07,vE:0.42,vK:1.15,vC:0,b1:0.21,b2:0.07,b3:2.09,b6:0.17,fol:19,b12:0.01,cho:14}},
+  kachori: {name:'Tea Post mini kachori (4 pieces, ~92 g)', nova:3, v:{kcal:380,p:7.43,c:33.44,sug:4.03,fib:2.44,f:24.09,sat:2.87,chol:0,na:658,k:256,ca:18,mg:39,fe:1.27,zn:0.74,ph:102,se:9.66,vA:0,vD:0,vE:4.67,vK:4.35,vC:0,b1:0.13,b2:0.04,b3:0.77,b6:0.1,fol:49,b12:0,cho:23}},
   cran:     {name:'Real Cranberry', nova:4, v:{kcal:56,c:13.6,sug:12.9,na:4.9,k:30,vC:10}},
 };
 
 // ===== Foods (one unit each). parts: [ingredient, grams]. param: per-unit option =====
 export const FOODS = [
-  {id:'taco', name:'Paratha taco', sub:'paratha + cheese cube + ½ tsp ghee + 3 sauces', parts:[['paratha',80],['cube',25],['ghee',2.25],['ketchup',5],['chipotle',5],['mustard',5]]},
+  // sauces: per-taco amount in teaspoons (1 tsp = 5 g), 0–2, default 1 each
+  {id:'taco', name:'Paratha taco', sub:'paratha + cheese cube + ½ tsp ghee + sauces', parts:[['paratha',80],['cube',25],['ghee',2.25]],
+    sauces:[{key:'ketchup', label:'Ketchup', g:5, def:1, max:2}, {key:'chipotle', label:'Chipotle', g:5, def:1, max:2}, {key:'mustard', label:'Mustard', g:5, def:1, max:2}]},
   {id:'omelette', name:'Omelette', sub:'eggs + 1 tsp ghee + salt, chilli', param:{key:'eggs', label:'Eggs', def:3, min:1, max:8}, parts:[['ghee',4.5],['salt',0.5]], perParam:[['egg',50]]},
   {id:'toast', name:'Ghee-toast slice', sub:"Baker's Loaf slice + ¼ tsp ghee", parts:[['bread',25],['ghee',1.125]]},
   {id:'spreadtoast', name:'Bread + Pepper Punchy', sub:'ghee-toast slice + 2 tsp spread', parts:[['bread',25],['ghee',1.125],['spread',10]]},
@@ -102,6 +116,18 @@ export const FOODS = [
   {id:'banana', name:'Banana', sub:'1 medium', parts:[['banana',118]]},
   {id:'cosmix', name:'Cosmix', sub:'1 scoop (38 g)', parts:[['cosmix',38]]},
   {id:'sattu', name:'Sattu', sub:'1 scoop (35 g)', parts:[['sattu',35]]},
+  // ===== Outside foods (out:true) =====
+  {id:'domslice', out:true, step:1, name:"Domino's Margherita", sub:'medium · per slice · 6 slices = whole (1,170 kcal)', parts:[['domslice',100]]},
+  {id:'phslice', out:true, step:1, name:'Pizza Hut Margherita', sub:'medium Pan · per slice · 6 slices = whole (1,377 kcal)', parts:[['phslice',100]]},
+  {id:'domsticks', out:true, name:"Domino's Garlic Breadsticks", sub:'per serve · 1 pack = 2 serves', parts:[['domsticks',100]]},
+  {id:'domdip', out:true, step:1, name:"Domino's Cheesy Dip", sub:'1 dip', parts:[['domdip',100]]},
+  {id:'phgbc', out:true, name:'Pizza Hut Garlic Bread Cheese', sub:'1 order (136 g)', parts:[['phgbc',100]]},
+  {id:'phstix', out:true, name:'Pizza Hut Loaded Bread Stix', sub:'1 order (210 g)', parts:[['phstix',100]]},
+  {id:'dalmak', out:true, step:0.25, name:'Sadak Chaap Dal Makhani', sub:'per ~500 ml box · ¼ = quarter box', parts:[['dalmak',100]]},
+  {id:'naan', out:true, name:'Butter naan', sub:'per piece', parts:[['naan',100]]},
+  {id:'rumali', out:true, name:'Rumali roti', sub:'per piece', parts:[['rumali',100]]},
+  {id:'tandroti', out:true, name:'Butter tandoori roti', sub:'per piece', parts:[['tandroti',100]]},
+  {id:'kachori', out:true, step:0.25, name:'Tea Post mini kachori', sub:'per order of 4 · ¼ = 1 kachori', parts:[['kachori',100]]},
 ];
 export const STANDARD_DAY = [
   {f:'omelette', q:1, o:{eggs:3}}, {f:'toast', q:4}, {f:'cosmix', q:1}, {f:'sattu', q:1},
