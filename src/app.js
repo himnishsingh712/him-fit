@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.12.5';
+const APP_VERSION = '1.12.4';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -902,8 +902,6 @@ function viewSetup() {
   h += `<div class="card span2"><h2>Goal</h2><div class="btns c1">${GOALS.map(x => opt('goal', x.id, x.n, x.d)).join('')}</div>
     ${inp('targetKg','Target weight (kg)','number','inputmode="decimal" step="0.5" min="30" max="250"')}<div class="fl">Pace (kg per week)<div class="btns c${g.paces.length}">${g.paces.map(v => opt('pace', v, (v > 0 ? '+' : '') + v + ' kg')).join('')}</div></div>
     ${(() => { const kg = num(p.weightKg); const gc = kg && num(p.targetKg) ? goalCheck({...p, targetKg: num(p.targetKg)}, kg) : null; return gc ? `<div class="flag warn"><div>${esc(gc)}</div></div>` : ''; })()}
-    ${(() => { const P0 = PROF(); if (!P0) return ''; const b0 = bodyNow(P0, ctxFor(todayKey())); const pl0 = plan(todayKey()); const pa = b0.paceActual; const eta = pa != null ? etaWeeks(P0, b0.kg, pa) : null;
-      return `<div class="tile"><div class="l">Actual pace so far</div><div class="v">${pa != null ? (pa >= 0 ? '+' : '') + pa.toFixed(2) + ' kg/week' : '—'}</div><div class="s">${pa == null ? 'needs 5 weigh-ins over 7+ days' : `planned ${(pl0.pace >= 0 ? '+' : '') + pl0.pace} kg/week${eta ? ` · at this pace ~${Math.ceil(eta)} weeks to ${P0.targetKg} kg` : ''}`}</div></div>`; })()}
     <div class="muted small">Paces outside these ranges aren't offered: faster gain is mostly fat and water, faster loss costs muscle.</div></div>`;
   h += `<div class="card span2"><div class="small" id="pfprev">${pfPreview()}</div>${S.pfErr ? `<div class="flag warn" role="alert">${esc(S.pfErr)}</div>` : ''}<button class="btn primary" data-act="pfsave">${first ? 'Save and see my numbers' : 'Save'}</button>${first ? '<a href="#" class="small" data-act="pflater" style="text-align:center">Do this later</a>' : '<a href="#me" class="small" style="text-align:center">Cancel</a>'}</div>`;
   return h + '</div>';
