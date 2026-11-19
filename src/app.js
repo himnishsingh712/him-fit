@@ -59,13 +59,21 @@ const STD_MEAL = {omelette:'breakfast', toast:'breakfast', cosmix:'breakfast', s
 
 // ================= nutrition engine =================
 const unitCache = {};
+// per-unit sauce grams for foods with sauce choices (taco): level 0–2 tsp
+const sauceLv = (s, o) => { const v = o?.[s.key]; return v == null ? s.def : v; };
+const sauceParts = (f, o = {}) => (f?.sauces || []).map(s => [s.key, s.g * sauceLv(s, o)]);
+const sauceDefaults = f => Object.fromEntries((f?.sauces || []).map(s => [s.key, s.def]));
+function sauceSummary(f, o) { if (!f?.sauces) return ''; const on = f.sauces.filter(s => sauceLv(s, o) > 0); if (f.sauces.every(s => sauceLv(s, o) === s.def)) return ''; if (!on.length) return 'no sauce'; return on.map(s => s.label.toLowerCase() + (sauceLv(s, o) > 1 ? ' ×' + sauceLv(s, o) : '')).join(' + ') + (on.length === 1 ? ' only' : ''); }
+const sauceRow = (f, o, act, id) => (f.sauces || []).map(s => { const lv = sauceLv(s, o); return `<div class="row sauce"><span class="small">${s.label}</span><div class="seg" style="grid-template-columns:repeat(${s.max + 1},1fr);width:190px">${Array.from({length: s.max + 1}, (_, i) => `<button class="${lv === i ? 'on' : ''}" data-act="${act}" data-id="${id}" data-k="${s.key}" data-n="${i}" aria-label="${s.label} ${i ? i + ' teaspoon' : 'none'}">${i ? i + ' tsp' : 'None'}</button>`).join('')}</div></div>`; }).join('');
 function vecAdd(t, v, mult) { for (const k in v) t[k] = (t[k] || 0) + v[k] * mult; return t; }
 function foodUnit(fid, o = {}) {
   const f = FMAP[fid]; if (!f) return {};
   const pv = f.param ? (o[f.param.key] ?? f.param.def) : 0;
-  const ck = fid + '|' + pv; if (unitCache[ck]) return unitCache[ck];
+  const sp = sauceParts(f, o);
+  const ck = fid + '|' + pv + '|' + sp.map(x => x[1]).join(','); if (unitCache[ck]) return unitCache[ck];
   const t = {};
   f.parts.forEach(([i, g]) => vecAdd(t, ING[i].v, g / 100));
+  sp.forEach(([i, g]) => vecAdd(t, ING[i].v, g / 100));
   if (f.perParam) f.perParam.forEach(([i, g]) => vecAdd(t, ING[i].v, g * pv / 100));
   return (unitCache[ck] = t);
 }
@@ -92,8 +100,9 @@ function itemLabel(it) {
   const f = FMAP[it.f]; if (!f) return 'Unknown item';
   let n = f.name;
   if (f.param) n += ` · ${it.o?.[f.param.key] ?? f.param.def} ${f.param.label.toLowerCase()}`;
+  const ss = sauceSummary(f, it.o);
   if (it.f === 'dosa' && it.q === 8) return 'Dosa · full pack (8)';
-  return it.q !== 1 ? `${n} × ${fq(it.q)}` : n;
+  return (it.q !== 1 ? `${n} × ${fq(it.q)}` : n) + (ss ? ` · ${ss}` : '');
 }
 function drinkLabel(dr) {
   if (dr.k === 'caf') { const c = CMAP[dr.d]; if (!c) return 'Drink'; return c.name + (c.shots ? ` · ${dr.shots || c.shots} shot${(dr.shots || c.shots) > 1 ? 's' : ''}` : '') + (c.sizes && c.sizes.length > 1 ? ` ${dr.size || c.sizes[0]} ml` : '') + (!c.nosugar ? (dr.sugar ? ` · ${dr.sugar} tsp sugar` : ' · no sugar') : ''); }
@@ -108,7 +117,7 @@ function dayCalc(day, opts = {}) {
   const tot = {}; const contrib = []; const nova = {};
   (day?.items || []).forEach(it => {
     const v = itemVec(it); vecAdd(tot, v, 1); contrib.push({label: itemLabel(it), v});
-    const f = FMAP[it.f]; if (f) { novaKcal(f.parts, it.q, nova); if (f.perParam) novaKcal(f.perParam.map(([i,g]) => [i, g * (it.o?.[f.param.key] ?? f.param.def)]), it.q, nova); }
+    const f = FMAP[it.f]; if (f) { novaKcal(f.parts, it.q, nova); novaKcal(sauceParts(f, it.o), it.q, nova); if (f.perParam) novaKcal(f.perParam.map(([i,g]) => [i, g * (it.o?.[f.param.key] ?? f.param.def)]), it.q, nova); }
   });
   (day?.ci?.drinks || []).forEach(dr => {
     const v = drinkVec(dr); vecAdd(tot, v, 1); contrib.push({label: drinkLabel(dr), v});
@@ -133,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.5.8';
+const APP_VERSION = '1.6.0';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -453,16 +462,19 @@ function viewLog() {
   const logged = {}; (day(S.date).items || []).forEach(it => { logged[it.f] = (logged[it.f] || 0) + it.q; });
   { const yIts = (S.days[addDays(S.date, -1)]?.items || []).filter(it => mealOf(it) === curMeal); if (yIts.length) { const v = {}; yIts.forEach(it => vecAdd(v, itemVec(it), 1)); h += `<button class="card span2 drinkbtn" data-act="repeatmeal" data-id="${curMeal}" style="border-color:var(--acc)"><b>Repeat yesterday's ${MEALN[curMeal].toLowerCase()}</b><span class="small muted">${esc(yIts.map(itemLabel).join(', '))} · ${fmt(v.kcal,'kcal')} kcal · ${fmt(v.p,'g')} g</span></button>`; } }
   const use = {}; rangeKeys(addDays(S.date, -1), 30).forEach(x => (S.days[x]?.items || []).forEach(it => { if (mealOf(it) === curMeal) use[it.f] = (use[it.f] || 0) + 1; }));
-  const FOODS_SORTED = FOODS.map((f, i) => ({f, i})).sort((a, b) => (use[b.f.id] || 0) - (use[a.f.id] || 0) || a.i - b.i).map(x => x.f);
-  h += `<div class="card span2"><h2>Your foods</h2><div class="muted small">Sorted by what you usually eat at ${MEALN[curMeal].toLowerCase()}. Numbers start from what you've already logged ${S.date === todayKey() ? 'today' : 'that day'}; + adds more. Tap a number to type halves (0.5, 1.5…); curd and big pizza go in quarters (0.25).</div><div class="list">`;
+  const bySort = xs => xs.map((f, i) => ({f, i})).sort((a, b) => (use[b.f.id] || 0) - (use[a.f.id] || 0) || a.i - b.i).map(x => x.f);
+  const FOODS_SORTED = [...bySort(FOODS.filter(f => !f.out)), 'OUT', ...bySort(FOODS.filter(f => f.out))];
+  h += `<div class="card span2"><h2>Your foods</h2><div class="muted small">Sorted by what you usually eat at ${MEALN[curMeal].toLowerCase()}. Numbers start from what you've already logged ${S.date === todayKey() ? 'today' : 'that day'}; + adds more. Tap a number to type halves (0.5, 1.5…); curd, big pizza, dal makhani and kachori go in quarters (0.25).</div><div class="list">`;
   FOODS_SORTED.forEach(f => {
+    if (f === 'OUT') { h += `<div class="li"><div class="main"><div class="t" style="color:var(--acc)">Outside food</div><div class="s">Restaurant and takeaway portions</div></div></div>`; return; }
     const c = cart[f.id] || {q: 0}; const u = foodUnit(f.id, c.o || {});
     if (f.dosa) {
       h += `<div class="li" style="flex-direction:column;align-items:stretch"><div class="row"><div class="main"><div class="t">${f.name}</div><div class="s">${fmt(u.kcal,'kcal')} kcal · ${fmt(u.p,'g')} g each · full pack ${fmt(u.kcal*8,'kcal')} kcal · ${fmt(u.p*8,'g')} g</div></div>${S.dosaMode === 'n' ? baseStepper(f.id, logged.dosa || 0, c.q) : `<span style="text-align:right"><span class="n" style="font-family:var(--head);font-weight:700">${c.q ? '+' + c.q : ''}</span>${logged.dosa ? `<span class="small muted" style="display:block">${fq(logged.dosa)} logged</span>` : ''}</span>`}</div>
         <div class="btns c3"><button class="btn ${c.q === 1 && S.dosaMode !== 'n' ? 'on' : ''}" data-act="dosa" data-m="1">1 dosa</button><button class="btn ${S.dosaMode === 'n' ? 'on' : ''}" data-act="dosa" data-m="n">Number…</button><button class="btn ${c.q === 8 && S.dosaMode !== 'n' ? 'on' : ''}" data-act="dosa" data-m="8">Full pack (8)</button></div></div>`;
       return;
     }
-    h += `<div class="li ${c.q ? '' : ''}"><div class="main"><div class="t">${f.name}</div><div class="s">${f.param ? `${fmt(u.kcal,'kcal')} kcal at ${c.o?.[f.param.key] ?? f.param.def} eggs · ${fmt(u.p,'g')} g` : `${fmt(u.kcal,'kcal')} kcal · ${fmt(u.p,'g')} g protein`}</div></div>${baseStepper(f.id, logged[f.id] || 0, c.q)}</div>`;
+    h += `<div class="li ${c.q ? '' : ''}"><div class="main"><div class="t">${f.name}</div><div class="s">${f.param ? `${fmt(u.kcal,'kcal')} kcal at ${c.o?.[f.param.key] ?? f.param.def} eggs · ${fmt(u.p,'g')} g` : `${fmt(u.kcal,'kcal')} kcal · ${fmt(u.p,'g')} g protein${f.sauces ? ' each, with sauces below' : ''}`}${f.out ? `<br>${esc(f.sub)}` : ''}</div></div>${baseStepper(f.id, logged[f.id] || 0, c.q)}</div>`;
+    if (f.sauces && c.q) h += `<div class="li" style="flex-direction:column;align-items:stretch;gap:6px"><div class="s small muted">Sauces per taco (1 tsp = 5 g)</div>${sauceRow(f, c.o, 'sauce', f.id)}</div>`;
     if (f.param && c.q) h += `<div class="li"><div class="main"><div class="s" style="padding-left:12px">${f.param.label} per omelette</div></div>${stepper('param', f.id, c.o?.[f.param.key] ?? f.param.def)}</div>`;
   });
   h += `</div><div class="muted small">New foods get added to this list from their pack labels — ask Claude in chat.</div></div></div>`;
@@ -910,7 +922,7 @@ function sheetHTML() {
     const d = day(S.date); const it = d.items.find(x => x.id === sh.id); if (!it) return '';
     const f = FMAP[it.f]; const v = itemVec(it);
     return `<div class="sheetbg" data-act="closesheet"><div class="sheet" role="dialog" aria-label="Edit item" data-stop="1"><div class="row"><h3>${esc(f.name)}</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>
-      <div class="row"><span>Quantity</span><div class="stepper"><button data-act="itemq" data-id="${it.id}" data-n="-1" aria-label="Fewer">−</button><input class="qn" type="number" inputmode="decimal" step="${stepOf(it.f)}" min="${stepOf(it.f)}" value="${it.q}" data-act="itemqset" data-id="${it.id}" aria-label="Quantity, tap to type"><button data-act="itemq" data-id="${it.id}" data-n="1" aria-label="More">+</button></div></div><div class="small muted" style="margin-top:-4px">Tap the number to type an amount, e.g. ${stepOf(it.f) === 0.25 ? '0.25 = ¼' : '0.5 = ½'}</div>${f.param ? `<div class="row"><span>${f.param.label}</span>${stepper('itemp', it.id, it.o?.[f.param.key] ?? f.param.def)}</div>` : ''}
+      <div class="row"><span>Quantity</span><div class="stepper"><button data-act="itemq" data-id="${it.id}" data-n="-1" aria-label="Fewer">−</button><input class="qn" type="number" inputmode="decimal" step="${stepOf(it.f)}" min="${stepOf(it.f)}" value="${it.q}" data-act="itemqset" data-id="${it.id}" aria-label="Quantity, tap to type"><button data-act="itemq" data-id="${it.id}" data-n="1" aria-label="More">+</button></div></div><div class="small muted" style="margin-top:-4px">Tap the number to type an amount, e.g. ${stepOf(it.f) === 0.25 ? '0.25 = ¼' : '0.5 = ½'}</div>${f.param ? `<div class="row"><span>${f.param.label}</span>${stepper('itemp', it.id, it.o?.[f.param.key] ?? f.param.def)}</div>` : ''}${f.sauces ? `<div class="small muted">Sauces per taco (1 tsp = 5 g)</div>${sauceRow(f, it.o, 'itemsauce', it.id)}` : ''}${f.out ? `<div class="small muted">${esc(f.sub)}</div>` : ''}
       <div class="row"><span>Time</span><input class="field" style="width:150px" type="time" value="${hhmm(it.t || Date.now())}" data-act="itemtime" data-id="${it.id}" aria-label="Time eaten"></div>
       <div class="btns c3">${MEALS.map(m => `<button class="btn ${m.id === mealOf(it) ? 'on' : ''}" data-act="itemmeal" data-id="${m.id}" data-item="${it.id}" style="padding:0 6px;font-size:13px">${m.n}</button>`).join('')}</div>
       <div class="muted small">${fmt(v.kcal,'kcal')} kcal · ${fmt(v.p,'g')} g protein · ${fmt(v.f,'g')} g fat</div><button class="btn danger" data-act="delitem" data-id="${it.id}">Remove</button></div></div>`;
@@ -1050,10 +1062,12 @@ document.addEventListener('click', e => {
     case 'day': { const nk = addDays(S.date, n); if (nk <= todayKey()) { S.date = nk; S.open = null; render(); } break; }
     case 'gotoday': e.preventDefault(); S.date = todayKey(); render(); break;
     case 'water': { const before = d.water || 0; d.water = Math.max(0, before + n); if (k === todayKey()) { d.wl = d.wl || []; if (n > 0) d.wl.push({t: Date.now(), ml: n}); else { let r = before - d.water; while (r > 0 && d.wl.length) { const l = d.wl[d.wl.length-1]; if (l.ml <= r) { r -= l.ml; d.wl.pop(); } else { l.ml -= r; r = 0; } } } } touch(k); break; }
-    case 'cart': { const c = S.cart[id] || (S.cart[id] = {q: 0, o: {}}); c.q = Math.max(0, c.q + n); if (FMAP[id].param && !c.o[FMAP[id].param.key]) c.o[FMAP[id].param.key] = FMAP[id].param.def; render(); break; }
+    case 'cart': { const c = S.cart[id] || (S.cart[id] = {q: 0, o: {...sauceDefaults(FMAP[id])}}); c.q = Math.max(0, c.q + n); if (FMAP[id].param && !c.o[FMAP[id].param.key]) c.o[FMAP[id].param.key] = FMAP[id].param.def; render(); break; }
+    case 'sauce': { const c = S.cart[id] || (S.cart[id] = {q: 0, o: {...sauceDefaults(FMAP[id])}}); c.o[el.dataset.k] = n; render(); break; }
+    case 'itemsauce': { const it = d.items.find(x => x.id === id); if (it) { it.o = {...(it.o || {}), [el.dataset.k]: n}; touch(k); } break; }
     case 'param': { const f = FMAP[id]; const c = S.cart[id]; const pk = f.param.key; c.o[pk] = Math.min(f.param.max, Math.max(f.param.min, (c.o[pk] ?? f.param.def) + n)); render(); break; }
     case 'dosa': { const m = el.dataset.m; const c = S.cart.dosa || (S.cart.dosa = {q: 0, o: {}}); if (m === 'n') { S.dosaMode = 'n'; c.q = Math.max(c.q, 1); } else { S.dosaMode = null; c.q = c.q === +m ? 0 : +m; } render(); break; }
-    case 'addcart': { const m = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast'); const nowMeal = mealByHour(new Date().getHours()); const past = S.date !== todayKey() || MEALS.findIndex(x => x.id === m) < MEALS.findIndex(x => x.id === nowMeal); const now = past ? mealTime(k, m) : Date.now(); if (past) setTimeout(() => toast(`Time set to ${tlabel(now)} — change it by tapping the item`), 1900); Object.entries(S.cart).forEach(([fid, c]) => { if (c.q > 0) d.items.push({id: uid(), f: fid, q: c.q, o: FMAP[fid].param ? {[FMAP[fid].param.key]: c.o[FMAP[fid].param.key] ?? FMAP[fid].param.def} : {}, t: now, m}); }); S.cart = {}; S.dosaMode = null; S.meal = null; touch(k); toast('Added'); location.hash = '#today'; break; }
+    case 'addcart': { const m = S.meal || (S.date === todayKey() ? mealByHour(new Date().getHours()) : 'breakfast'); const nowMeal = mealByHour(new Date().getHours()); const past = S.date !== todayKey() || MEALS.findIndex(x => x.id === m) < MEALS.findIndex(x => x.id === nowMeal); const now = past ? mealTime(k, m) : Date.now(); if (past) setTimeout(() => toast(`Time set to ${tlabel(now)} — change it by tapping the item`), 1900); Object.entries(S.cart).forEach(([fid, c]) => { if (c.q > 0) d.items.push({id: uid(), f: fid, q: c.q, o: {...(FMAP[fid].sauces ? Object.fromEntries(FMAP[fid].sauces.map(s => [s.key, sauceLv(s, c.o)])) : {}), ...(FMAP[fid].param ? {[FMAP[fid].param.key]: c.o[FMAP[fid].param.key] ?? FMAP[fid].param.def} : {})}, t: now, m}); }); S.cart = {}; S.dosaMode = null; S.meal = null; touch(k); toast('Added'); location.hash = '#today'; break; }
     case 'stdday': { const now = Date.now(); STANDARD_DAY.forEach(s => d.items.push({id: uid(), f: s.f, q: s.q, o: s.o || {}, t: now, m: STD_MEAL[s.f] || 'breakfast'})); touch(k); toast('Standard day added'); location.hash = '#today'; break; }
     case 'edititem': S.sheet = {type: 'item', id}; render(); break;
     case 'itemq': { const it = d.items.find(x => x.id === id); if (it) { it.q = Math.max(stepOf(it.f), it.q + n); touch(k); } break; }
@@ -1119,7 +1133,7 @@ document.addEventListener('change', e => {
   if (act === 'ci') { d.ci = d.ci || {}; const f = el.dataset.f; const v = el.value === '' ? null : +el.value; if (v == null || isNaN(v)) { delete d.ci[f]; if (f === 'w') delete d.ci.wt; } else { d.ci[f] = v; if (f === 'w') d.ci.wt = k === todayKey() ? Date.now() : atClock(k, (PROF()?.wake || '09:00'), false); } touch(k); }
   if (act === 'tapein') { d.ci = d.ci || {}; const f = el.dataset.f; const v = el.value === '' ? null : +el.value; if (v == null || isNaN(v)) delete d.ci[f]; else d.ci[f] = Math.round(v * IN * 10) / 10; touch(k); }
   if (act === 'sleeptime') { d.ci = d.ci || {}; const mc = d.ci.mc && !d.ci.mc.skipped ? d.ci.mc : (d.ci.mc = {bed: PROF()?.bed || '01:00', wake: PROF()?.wake || '09:00', t: Date.now()}); mc[el.dataset.f] = el.value; const sl = Math.round((atClock(k, mc.wake, false) - bedMs(k, mc.bed)) / 3600e3 * 4) / 4; if (sl > 0 && sl < 16) d.ci.sl = sl; touch(k); }
-  if (act === 'cartset') { const id = el.dataset.id, base = +el.dataset.base || 0; const c = S.cart[id] || (S.cart[id] = {q: 0, o: {}}); c.q = Math.max(0, roundStep(el.value, stepOf(id)) - base); if (FMAP[id].param && !c.o[FMAP[id].param.key]) c.o[FMAP[id].param.key] = FMAP[id].param.def; if (id === 'dosa' && c.q) S.dosaMode = 'n'; render(); }
+  if (act === 'cartset') { const id = el.dataset.id, base = +el.dataset.base || 0; const c = S.cart[id] || (S.cart[id] = {q: 0, o: {...sauceDefaults(FMAP[id])}}); c.q = Math.max(0, roundStep(el.value, stepOf(id)) - base); if (FMAP[id].param && !c.o[FMAP[id].param.key]) c.o[FMAP[id].param.key] = FMAP[id].param.def; if (id === 'dosa' && c.q) S.dosaMode = 'n'; render(); }
   if (act === 'itemqset') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it) { it.q = Math.max(stepOf(it.f), roundStep(el.value, stepOf(it.f)) || it.q); touch(k); } }
   if (act === 'itemtime') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it && el.value) { it.t = atClock(k, el.value); touch(k); } }
   if (act === 'dtime') { S.sheet.time = el.value; }
