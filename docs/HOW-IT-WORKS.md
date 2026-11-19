@@ -94,3 +94,10 @@ Six spots, whenever you like (Me tab → Measurements → Update measurements, w
 
 ## v1.6.1 — Time eaten on the Log screen
 The Log screen has a "Time eaten" field. Today it starts at the current time; on a past day it starts at that meal's usual time. Picking a meal only labels the food — it never moves the time (before, adding to an earlier meal reset the time to the meal's default, e.g. 1:30 PM for lunch). "Repeat yesterday's meal" uses the same time.
+
+## v1.7.0 — Energy ratings, day thirds, moments, real bedtime
+- **Real bedtime:** once the next morning's check-in gives your bedtime, that day's curve ends there, and the stored prediction (ePred) averages only the hours you were awake. Before, it ran to your usual profile bedtime.
+- **Energy ratings:** a card on Today asks "How's your energy right now?" (Awful–Great = 1–5) 3, 7 and 11 h after your wake-up. Skippable; each prompt stays until the next one is due (or 16 h awake). Saved as ci.er [{s: slot, v: 1–5 or null if skipped, t}]. Shown as ◆ on the energy chart.
+- **Day thirds:** the three tiles are Early day / Midday / Late day — your waking day (wake to bedtime) cut into equal thirds, with the time range under each. The part you're in shows "so far" (only hours already lived); later parts show "forecast".
+- **Moments (Check-in):** 🚿 Hot shower, 🚿 Cool shower, 🌶️ Spicy time — tap when it happens, time editable, removable. Saved as ci.ev [{id, k, t}]. Shown as markers on the chart. Not in the score: tested against ratings on 16 Dec, together with heat (from historical Ahmedabad weather, nothing recorded daily).
+- The score's maths (model v1) is unchanged.
