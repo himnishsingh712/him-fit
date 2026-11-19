@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.8.1';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -340,7 +340,10 @@ function energyInput(k) {
   { const nights = [4, 5, 6, 7].map(i => S.days[addDays(k, -i)]?.ci?.sl).filter(x => x != null); if (nights.length >= 2) pattern.weekShort = mean(nights.map(h => Math.max(0, 7.5 - h))); }
   const streak = f => { let n = 0; for (let i = 0; i < 14; i++) { const mc = S.days[addDays(k, -i)]?.ci?.mc; if (mc && !mc.skipped && mc[f] != null && mc[f] <= 1) n++; else break; } return n; };
   pattern.lowMoodDays = streak('mood'); pattern.badSleepDays = streak('sq');
-  return {pattern, heat: true, events: (ci.ev || []).map(x => ({t: x.t, k: x.k})), rates: (ci.er || []).filter(r => r.v).map(r => ({t: r.t, v: r.v})),
+  // how your ratings usually sit against the model (needs 10+ checks with the model's score saved)
+  const allR = allKeys().flatMap(x => (S.days[x]?.ci?.er || []).filter(r => r.v && r.m != null)).slice(-30);
+  const rateBias = allR.length >= 10 ? mean(allR.map(r => RATE_SCORE[r.v] - r.m)) : 0;
+  return {pattern, rateBias, events: (ci.ev || []).map(x => ({t: x.t, k: x.k})), rates: (ci.er || []).filter(r => r.v).map(r => ({t: r.t, v: r.v})),
     wake: st.wake, bed: st.bed, real: st.real, usualWakeMin: minOf(p.wake || '09:00'), usualBedMin: minOf(p.bed || '01:00'),
     priorSleep: [1, 2, 3].map(i => { const c = S.days[addDays(k, -i)]?.ci; return c?.sl != null ? c.sl + 0.7 * napHours(c) : null; }), report: ci.mc && !ci.mc.skipped && ci.mc.sq != null && ci.mc.mood != null && ci.mc.feel != null ? {sq: ci.mc.sq, mood: ci.mc.mood, feel: ci.mc.feel} : null,
     naps: (ci.naps || []).map(n => ({s: n.s, e: n.e})), intakes, caffeine, water, hits: ci.hitsT || [], tags: ci.tags || [], yTags: y.ci?.tags || [], hitsAvg7: h7.length ? mean(h7) : 0, lastNight, targets: {kcal: T('kcal'), p: T('p'), water: waterTarget()}};
@@ -725,7 +728,7 @@ function energyCard(k) {
     </div>`;
   return h;
 }
-const LAYERS = [['tags','Day tags'],['sleep','Sleep'],['nap','Naps'],['report','Your morning report'],['clock','Body clock'],['fuel','Food'],['water','Water'],['caffeine','Caffeine'],['alcohol','Alcohol'],['cannabis','Cannabis'],['moments','Moments'],['pattern','Patterns'],['heat','Heat'],['you','Your energy checks']];
+const LAYERS = [['tags','Day tags'],['sleep','Sleep'],['nap','Naps'],['report','Your morning report'],['clock','Body clock'],['fuel','Food'],['water','Water'],['caffeine','Caffeine'],['alcohol','Alcohol'],['cannabis','Cannabis'],['moments','Moments'],['pattern','Patterns'],['you','Your energy checks']];
 function energySheet() { return `<div class="sheetbg" data-act="closesheet"><div class="sheet tall" role="dialog" aria-label="Energy breakdown" data-stop="1"><div class="row"><h3>Energy breakdown</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>${energyBreakdown()}</div></div>`; }
 function energyBreakdown() {
   const k = S.date, isToday = k === todayKey(); const e = energyFor(k, isToday ? Date.now() : dayEnd(k)); const c = e.cur;
@@ -747,8 +750,7 @@ function energyBreakdown() {
     <p><b>Day tags:</b> sick −12 all day; stressed −5; travel −5; exam +4 for the first 8 h awake, then −4; party +4 in the evening and −6 the next morning, fading by midday.</p>
     <p><b>Moments:</b> cool shower +7 right after, gone in ~75 min. Hot shower +3 for 20 min, then −4 relaxed for about an hour. 🌶️ +3 for 20 min, then −7 relaxed, gone in 2 h.</p>
     <p><b>Patterns:</b> eating within 2 h of bed costs −3 next morning (within 1 h, −5); caffeine still in you at bedtime costs up to −6 next morning; both halve when you've answered the morning questions (your sleep-quality answer already carries part of it) and fade by midday. Short sleep on nights 4–7 back costs up to −5 all day. Low mood, or bad sleep, 3+ mornings running: −3 each.</p>
-    <p><b>Heat:</b> Ahmedabad's average high for the month; above 34°C it costs up to −5 in the afternoon (11 AM–8 PM, worst at 3 PM), already softened for fan and cooler. Zero from Oct to Feb.</p>
-    <p><b>Your energy checks:</b> when you rate your energy, the curve is pulled 70% of the way toward what you said and lets go over 4 hours. The prediction stored for comparison leaves this out, so the model is still tested fairly.</p>
+    <p><b>Your energy checks:</b> a nudge, not an override. Your rating is read on your own scale (after 10 checks the app learns how your ratings usually sit against the model). If it's within 8 points of the model, nothing changes. Beyond that the score moves 30% of the extra gap, never more than ±10, fading to nothing over 3 hours — and only half that if the model has strong reasons (score 40 or under, or 80 or over) and your rating points the other way. The prediction stored for comparison leaves this out, so the model is still tested fairly.</p>
     <p><b>Not counted:</b> cigarettes (your call) and training (no time recorded).</p>
     <p><b>Day split:</b> your waking day (wake-up to bedtime) is cut into three equal parts. 'So far' is the part already lived; 'forecast' assumes nothing else happens (no more food or water). Once the next morning's check-in gives your real bedtime, that day ends there.</p>
     <p><b>Model ${MODEL_VERSION} (from 19 Nov), frozen until 16 Dec 2026.</b> Until then none of these numbers change. On 16 Dec every layer is tested against your energy checks: layers that don't help get cut or re-weighted, one at a time.</p></div></details>`;
@@ -1107,7 +1109,7 @@ document.addEventListener('click', e => {
     case 'cart': { const c = S.cart[id] || (S.cart[id] = {q: 0, o: {...sauceDefaults(FMAP[id])}}); c.q = Math.max(0, c.q + n); if (FMAP[id].param && !c.o[FMAP[id].param.key]) c.o[FMAP[id].param.key] = FMAP[id].param.def; render(); break; }
     case 'sauce': { const c = S.cart[id] || (S.cart[id] = {q: 0, o: {...sauceDefaults(FMAP[id])}}); c.o[el.dataset.k] = n; render(); break; }
     case 'itemsauce': { const it = d.items.find(x => x.id === id); if (it) { it.o = {...(it.o || {}), [el.dataset.k]: n}; touch(k); } break; }
-    case 'rate': { const dd = day(todayKey()); dd.ci = dd.ci || {}; dd.ci.er = (dd.ci.er || []).filter(r => r.s !== n); dd.ci.er.push({s: n, v: +el.dataset.v, t: Date.now()}); touch(todayKey()); toast('Thanks — noted'); break; }
+    case 'rate': { const dd = day(todayKey()); dd.ci = dd.ci || {}; dd.ci.er = (dd.ci.er || []).filter(r => r.s !== n); let m = null; try { m = energyFor(todayKey(), Date.now(), {noRates: true}).cur.score; } catch (er) {} dd.ci.er.push({s: n, v: +el.dataset.v, t: Date.now(), m}); touch(todayKey()); toast('Thanks — noted'); break; }
     case 'rateskip': { e.preventDefault(); const dd = day(todayKey()); dd.ci = dd.ci || {}; dd.ci.er = (dd.ci.er || []).filter(r => r.s !== n); dd.ci.er.push({s: n, v: null, t: Date.now()}); touch(todayKey()); break; }
     case 'evadd': { d.ci = d.ci || {}; d.ci.ev = d.ci.ev || []; const t = k === todayKey() ? Date.now() : mealTime(k, 'esnack'); d.ci.ev.push({id: uid(), k: id, t}); touch(k); toast(`${EVN[id]} · ${tlabel(t)}`); break; }
     case 'evdel': { d.ci.ev = (d.ci?.ev || []).filter(x => x.id !== id); touch(k); break; }
