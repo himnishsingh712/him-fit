@@ -120,3 +120,8 @@ All raw logs are kept, so v1 and v2 can both be re-run over the same days on 16 
 - **Water:** football +750 ml, racket/gym +500 ml on that day's target.
 - **Removed:** Insights card, Trends processed-food share (stays on Nutrients), Targets hit, Weekdays vs weekends. Change history moved to "Target history" on Me.
 - **Foods:** Lay's Magic Masala and Uncle Chipps Spicy Treat, ₹20 pack = 48 g, NOVA 4.
+
+## v1.10.0 — Sleep button (night sleep and naps)
+- Quick-add row: "Repeat last meal" replaced by **😴 Going to sleep** → becomes **☀️ I'm awake** (with "Sleeping since … · Undo"). Pending start is kept in config (`zz`) so it survives closing the app and syncs.
+- On "I'm awake": under 10 min = not logged. **Night** if it started 8 PM–8 AM or lasted 5 h+; otherwise a **nap** (added to that day's naps). Night sleep is saved on the wake day as `ci.slp {s, e}`, sets that day's sleep hours, and pre-fills the morning questions (times still editable). If you forget the taps, the morning check-in works as before.
+- While asleep, today's energy curve ends at the tap time and the energy-check prompt is hidden.

@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -319,7 +319,23 @@ const atClock = (k, hhmm, afterMidnightIsNext = true) => { const [h, m] = (hhmm 
 const minOf = hhmm => { const [h, m] = (hhmm || '00:00').split(':').map(Number); return h * 60 + m; };
 // bedtime belongs to the night before day k: evening times are on k-1, after-midnight times on k
 const bedMs = (k, hhmm) => { const [h, m] = hhmm.split(':').map(Number); const d = parseKey(k); if (h >= 12) d.setDate(d.getDate() - 1); d.setHours(h, m, 0, 0); return d.getTime(); };
-function sleepTimes(k) { const p = PROF() || {}; const mc = S.days[k]?.ci?.mc; const bed = mc?.bed || p.bed || '01:00', wake = mc?.wake || p.wake || '09:00'; return {bed: bedMs(k, bed), wake: atClock(k, wake, false), real: !!(mc && mc.bed && !mc.skipped && mc.sq != null)}; }
+function sleepTimes(k) { const p = PROF() || {}; const ci = S.days[k]?.ci || {}; const mc = ci.mc;
+  if ((!mc || mc.skipped) && ci.slp) return {bed: ci.slp.s, wake: ci.slp.e, real: false}; // from the sleep button, before the morning questions
+  const bed = mc?.bed || p.bed || '01:00', wake = mc?.wake || p.wake || '09:00'; return {bed: bedMs(k, bed), wake: atClock(k, wake, false), real: !!(mc && mc.bed && !mc.skipped && mc.sq != null)}; }
+// sleep button: one 'Going to sleep' / 'I'm awake' pair for night sleep and naps
+const keyAt = ms => keyOf(new Date(ms - 6 * 3600e3));
+const isNight = (s, e) => { const h = new Date(s).getHours(); return h >= 20 || h < 8 || e - s >= 5 * 3600e3; };
+function sleepEnd() {
+  const c = CFG(); const s = c.zz?.t, e = Date.now(); if (!s) return;
+  delete c.zz; saveConfig(c);
+  if (e - s < 10 * 60e3) { toast('Under 10 minutes — not logged'); return; }
+  if (!isNight(s, e)) { const ks = keyAt(s), d = day(ks); d.ci = d.ci || {}; d.ci.naps = d.ci.naps || []; d.ci.naps.push({id: uid(), s, e}); touch(ks); toast(`Nap logged · ${fmtH((e - s) / 3600e3)}`); return; }
+  const kw = keyAt(e), d = day(kw); d.ci = d.ci || {}; d.ci.slp = {s, e};
+  const mc = d.ci.mc && !d.ci.mc.skipped ? d.ci.mc : null;
+  if (mc) { mc.bed = hhmm(s); mc.wake = hhmm(e); } else if (S.mc) { S.mc.bed = hhmm(s); S.mc.wake = hhmm(e); }
+  const sl = Math.round((e - s) / 3600e3 * 4) / 4; if (sl > 0 && sl < 16) d.ci.sl = sl;
+  touch(kw); toast(`Good morning · ${fmtH((e - s) / 3600e3)} of sleep`);
+}
 function endOfDayMs(k) { const p = PROF() || {}; return atClock(addDays(k, 1), p.bed || '01:00', false) - (minOf(p.bed || '01:00') >= 720 ? 864e5 : 0); }
 function energyInput(k) {
   const d = S.days[k] || {}, y = S.days[addDays(k, -1)] || {}; const ci = d.ci || {}; const st = sleepTimes(k); const p = PROF() || {};
@@ -350,7 +366,8 @@ function energyInput(k) {
     naps: (ci.naps || []).map(n => ({s: n.s, e: n.e})), intakes, caffeine, water, hits: ci.hitsT || [], tags: ci.tags || [], yTags: y.ci?.tags || [], yEvents: (y.ci?.ev || []).map(x => ({t: x.t, k: x.k})), hitsAvg7: h7.length ? mean(h7) : 0, lastNight, targets: {kcal: T('kcal'), p: T('p'), water: waterTarget()}};
 }
 // the bedtime you reported the next morning, if any (ends that day's curve)
-function realBedMs(k) { const nk = addDays(k, 1), mc = S.days[nk]?.ci?.mc; if (!mc || mc.skipped || !mc.bed) return null; const b = bedMs(nk, mc.bed), w = sleepTimes(k).wake; return b > w + 3600e3 ? b : null; }
+function realBedMs(k) { const nk = addDays(k, 1); const zz = CFG().zz?.t; if (zz && keyAt(zz) === k && zz > sleepTimes(k).wake + 3600e3) return zz;
+  const sp = S.days[nk]?.ci?.slp; if (sp && keyAt(sp.s) === k && !S.days[nk]?.ci?.mc?.bed) return sp.s; const mc = S.days[nk]?.ci?.mc; if (!mc || mc.skipped || !mc.bed) return null; const b = bedMs(nk, mc.bed), w = sleepTimes(k).wake; return b > w + 3600e3 ? b : null; }
 function dayEnd(k) { return realBedMs(k) ?? endOfDayMs(k); }
 function energyFor(k, now = Date.now(), opt = {}) { const inp = energyInput(k); if (opt.noRates) inp.rates = []; const rb = realBedMs(k); const end = rb ?? Math.max(endOfDayMs(k), Math.min(now, endOfDayMs(k) + 3 * 3600e3)); const ci = S.days[k]?.ci || {}; return {inp, ...energyDay(inp, Math.min(now, end), end), end, rates: ci.er || [], evs: ci.ev || []}; }
 function addHit(k, n) {
@@ -670,7 +687,7 @@ const hhmm = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(
 const tlabel = ms => new Date(ms).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
 function morningCard(k) {
   const d = day(k), y = S.days[addDays(k, -1)]; const p = PROF() || {};
-  const m = S.mc || (S.mc = {bed: p.bed || '01:00', wake: Date.now() >= atClock(k, p.wake || '09:00', false) ? (p.wake || '09:00') : hhmm(Date.now()), sq: null, mood: null, feel: null, yr: null, lc: null});
+  const sp = d.ci?.slp; const m = S.mc || (S.mc = sp ? {bed: hhmm(sp.s), wake: hhmm(sp.e), sq: null, mood: null, feel: null, yr: null, lc: null} : {bed: p.bed || '01:00', wake: Date.now() >= atClock(k, p.wake || '09:00', false) ? (p.wake || '09:00') : hhmm(Date.now()), sq: null, mood: null, feel: null, yr: null, lc: null});
   const row = (f, label, words) => `<div class="fl">${label}<div class="seg5">${words.map((w, i) => `<button class="${m[f] === i ? 'on' : ''}" data-act="mcset" data-f="${f}" data-v="${i}">${w}</button>`).join('')}</div></div>`;
   const hasY = y && hasData(y);
   const sl = (() => { const b = bedMs(k, m.bed), w = atClock(k, m.wake, false); return (w - b) / 3600e3; })();
@@ -772,7 +789,7 @@ function energyCompareCard() {
 // quick energy ratings: up to 3 a day, 3, 7 and 11 h after waking
 const RATE_SLOTS = [3, 7, 11], RATE_W = ['Awful','Low','Okay','Good','Great'];
 function rateSlotNow(k) {
-  if (k !== todayKey()) return null; const ci = S.days[k]?.ci || {}; const a = (Date.now() - sleepTimes(k).wake) / 3600e3;
+  if (k !== todayKey() || CFG().zz) return null; const ci = S.days[k]?.ci || {}; const a = (Date.now() - sleepTimes(k).wake) / 3600e3;
   let s = -1; RATE_SLOTS.forEach((h, i) => { if (a >= h) s = i; }); if (s < 0 || a > 16) return null;
   return (ci.er || []).some(r => r.s === s) ? null : s;
 }
@@ -791,7 +808,7 @@ function todayStrip(k, tot) {
 function quickAdd(k) {
   const d = day(k), due = dueList(k), done = due.length && due.every(x => d.supp?.[x.id]);
   const sup = !due.length ? '' : done ? `<button class="btn on" data-act="suppundo" aria-label="Supplements taken, tap to undo">✓ Supps</button>` : `<button class="btn" data-act="suppall">Took supps</button>`;
-  return `<div class="span2 qadd" style="grid-template-columns:repeat(${sup ? 4 : 3},minmax(0,1fr))"><button class="btn" data-act="qhit">+1 hit</button><button class="btn wbtn" data-act="water" data-n="250">+250 ml</button><button class="btn" data-act="qrepeat">Repeat last meal</button>${sup}</div>`;
+  return `<div class="span2 qadd" style="grid-template-columns:repeat(${sup ? 4 : 3},minmax(0,1fr))"><button class="btn" data-act="qhit">+1 hit</button><button class="btn wbtn" data-act="water" data-n="250">+250 ml</button>${CFG().zz ? `<button class="btn on" data-act="sleepend">☀️ I'm awake</button>` : `<button class="btn" data-act="sleepstart">😴 Going to sleep</button>`}${sup}</div>${CFG().zz ? `<div class="span2 muted small" style="text-align:center">Sleeping since ${tlabel(CFG().zz.t)} · <a href="#" data-act="sleepundo">Undo</a></div>` : ''}`;
 }
 function lastSitting() {
   for (const k of [todayKey(), addDays(todayKey(), -1)]) { const its = (S.days[k]?.items || []).filter(it => it.t).sort((a, b) => a.t - b.t); if (its.length) { const t = its[its.length-1].t; return its.filter(it => t - it.t <= 20 * 60e3); } }
@@ -1124,6 +1141,9 @@ document.addEventListener('click', e => {
     case 'daytag': { d.ci = d.ci || {}; const t = d.ci.tags = d.ci.tags || []; const i = t.indexOf(id); if (i >= 0) t.splice(i, 1); else t.push(id); touch(k); break; }
     case 'mcsave': saveMorning(k); toast('Morning check-in saved'); break;
     case 'mcskip': e.preventDefault(); d.ci = d.ci || {}; d.ci.mc = {skipped: true, t: Date.now()}; S.mc = null; touch(k); break;
+    case 'sleepstart': { const c = CFG(); c.zz = {t: Date.now()}; saveConfig(c); toast(`Good night · from ${tlabel(Date.now())}`); break; }
+    case 'sleepend': sleepEnd(); break;
+    case 'sleepundo': { e.preventDefault(); const c = CFG(); delete c.zz; saveConfig(c); toast('Undone'); break; }
     case 'energyinfo': e.preventDefault(); S.sheet = {type: 'energy'}; render(); break;
     case 'histsheet': e.preventDefault(); S.sheet = {type: 'hist'}; render(); break;
     case 'dcat': { const c = el.dataset.id; Object.assign(S.sheet, c === 'alc' ? {cat: c, d: 'beer5', ml: 330, m: 'none', mml: 0} : {cat: c, d: CAFF.find(x => x.cat === c).id, shots: null, sugar: c === 'tea' ? 1 : 0, size: null}); if (c !== 'alc') { const cc = CMAP[S.sheet.d]; S.sheet.shots = cc.shots || null; S.sheet.size = cc.sizes ? cc.sizes[0] : null; } render(); break; }
