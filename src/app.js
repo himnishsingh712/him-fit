@@ -1,5 +1,5 @@
 import {NUTRIENTS, ING, FOODS, STANDARD_DAY, DRINKS, MIXERS, SUPPS, DEFAULT_CONFIG, CAFF} from './data.js';
-import {energyAt, energyDay, band, ratingBand, MODEL_VERSION} from './energy.js';
+import {energyAt, energyDay, band, ratingBand, MODEL_VERSION, caffeineLevel, RATE_SCORE} from './energy.js';
 import {placeHits} from './hits.js';
 import {toCSV, download} from './export.js';
 import {sb} from './supabase.js';
@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -330,14 +330,25 @@ function energyInput(k) {
   const h7 = rangeKeys(addDays(k, -1), 7).map(x => S.days[x]?.ci?.hits).filter(x => x != null);
   const yEve = atClock(addDays(k, -1), '18:00', false), yLate = atClock(addDays(k, -1), '21:00', false);
   const lastNight = {std: sum((y.ci?.drinks || []).filter(dr => dr.t >= yEve).map(dr => (drinkVec(dr).alc || 0) / 10)), lateHits: (y.ci?.hitsT || []).filter(t => t >= yLate).length, totalHits: y.ci?.hits || 0};
-  return {wake: st.wake, bed: st.bed, real: st.real, usualWakeMin: minOf(p.wake || '09:00'), usualBedMin: minOf(p.bed || '01:00'),
+  // patterns from what you already log
+  const pattern = {};
+  if (st.real) {
+    const ym = (y.items || []).map(it => ({t: it.t, kc: itemVec(it).kcal || 0})).filter(x => x.t && x.kc >= 100 && x.t <= st.bed);
+    if (ym.length) pattern.lateMealH = (st.bed - Math.max(...ym.map(x => x.t))) / 3600e3;
+    pattern.bedCaf = caffeineLevel(caffeine.filter(x => x.t <= st.bed), st.bed);
+  }
+  { const nights = [4, 5, 6, 7].map(i => S.days[addDays(k, -i)]?.ci?.sl).filter(x => x != null); if (nights.length >= 2) pattern.weekShort = mean(nights.map(h => Math.max(0, 7.5 - h))); }
+  const streak = f => { let n = 0; for (let i = 0; i < 14; i++) { const mc = S.days[addDays(k, -i)]?.ci?.mc; if (mc && !mc.skipped && mc[f] != null && mc[f] <= 1) n++; else break; } return n; };
+  pattern.lowMoodDays = streak('mood'); pattern.badSleepDays = streak('sq');
+  return {pattern, heat: true, events: (ci.ev || []).map(x => ({t: x.t, k: x.k})), rates: (ci.er || []).filter(r => r.v).map(r => ({t: r.t, v: r.v})),
+    wake: st.wake, bed: st.bed, real: st.real, usualWakeMin: minOf(p.wake || '09:00'), usualBedMin: minOf(p.bed || '01:00'),
     priorSleep: [1, 2, 3].map(i => { const c = S.days[addDays(k, -i)]?.ci; return c?.sl != null ? c.sl + 0.7 * napHours(c) : null; }), report: ci.mc && !ci.mc.skipped && ci.mc.sq != null && ci.mc.mood != null && ci.mc.feel != null ? {sq: ci.mc.sq, mood: ci.mc.mood, feel: ci.mc.feel} : null,
     naps: (ci.naps || []).map(n => ({s: n.s, e: n.e})), intakes, caffeine, water, hits: ci.hitsT || [], tags: ci.tags || [], yTags: y.ci?.tags || [], hitsAvg7: h7.length ? mean(h7) : 0, lastNight, targets: {kcal: T('kcal'), p: T('p'), water: waterTarget()}};
 }
 // the bedtime you reported the next morning, if any (ends that day's curve)
 function realBedMs(k) { const nk = addDays(k, 1), mc = S.days[nk]?.ci?.mc; if (!mc || mc.skipped || !mc.bed) return null; const b = bedMs(nk, mc.bed), w = sleepTimes(k).wake; return b > w + 3600e3 ? b : null; }
 function dayEnd(k) { return realBedMs(k) ?? endOfDayMs(k); }
-function energyFor(k, now = Date.now()) { const inp = energyInput(k); const rb = realBedMs(k); const end = rb ?? Math.max(endOfDayMs(k), Math.min(now, endOfDayMs(k) + 3 * 3600e3)); const ci = S.days[k]?.ci || {}; return {inp, ...energyDay(inp, Math.min(now, end), end), end, rates: ci.er || [], evs: ci.ev || []}; }
+function energyFor(k, now = Date.now(), opt = {}) { const inp = energyInput(k); if (opt.noRates) inp.rates = []; const rb = realBedMs(k); const end = rb ?? Math.max(endOfDayMs(k), Math.min(now, endOfDayMs(k) + 3 * 3600e3)); const ci = S.days[k]?.ci || {}; return {inp, ...energyDay(inp, Math.min(now, end), end), end, rates: ci.er || [], evs: ci.ev || []}; }
 function addHit(k, n) {
   const d = day(k); d.ci = d.ci || {}; const ci = d.ci;
   if (k !== todayKey()) { ci.hits = Math.max(0, (ci.hits || 0) + n); touch(k); return; }
@@ -675,7 +686,7 @@ function saveMorning(k) {
   const yk = addDays(k, -1), y = S.days[yk];
   if (y && hasData(y)) {
     y.ci = y.ci || {}; if (m.yr != null) y.ci.eRep = m.yr + 1; if (m.lc != null) y.ci.lc = m.lc;
-    try { const e = energyFor(yk, dayEnd(yk)); y.ci.ePred = Math.round(mean(e.pts.map(p => p.score))); y.ci.eVer = MODEL_VERSION; } catch (er) {}
+    try { const e = energyFor(yk, dayEnd(yk), {noRates: true}); y.ci.ePred = Math.round(mean(e.pts.map(p => p.score))); y.ci.eVer = MODEL_VERSION; } catch (er) {}
     y.u = Date.now(); dirty[yk] = true;
   }
   S.mc = null; touch(k);
@@ -695,7 +706,7 @@ function energyCurve(e, now) {
   e.inp.caffeine.forEach(x => s += evt(x.t, 'var(--water)', 3.5));
   e.inp.hits.forEach(x => s += evt(x, 'var(--muted)', 2.2));
   e.inp.intakes.filter(x => x.alc).forEach(x => s += evt(x.t, 'var(--over)', 3.5));
-  const RY = [0, 22, 38, 57, 75, 90];
+  const RY = RATE_SCORE;
   (e.rates || []).forEach(r => { if (r.v && r.t >= t0 && r.t <= t1) { const x = X(r.t), y = Y(RY[r.v]); s += `<rect x="${(x - 4).toFixed(1)}" y="${(y - 4).toFixed(1)}" width="8" height="8" transform="rotate(45 ${x.toFixed(1)} ${y.toFixed(1)})" fill="var(--text)" stroke="var(--card)" stroke-width="1.5"><title>You: ${RATE_W[r.v - 1]}</title></rect>`; } });
   (e.evs || []).forEach(x => { if (x.t >= t0 && x.t <= t1) s += `<text x="${X(x.t).toFixed(1)}" y="${H - 2}" text-anchor="middle" font-size="11">${x.k === 'spicy' ? '🌶️' : '🚿'}</text>`; });
   if (now >= t0 && now <= t1) { const c = e.cur; s += `<line x1="${X(now)}" x2="${X(now)}" y1="0" y2="${H}" stroke="var(--text)" stroke-opacity=".25"/><circle cx="${X(now)}" cy="${Y(c.score)}" r="5" fill="${BCOL[band(c.score).c]}" stroke="var(--card)" stroke-width="2"/>`; }
@@ -714,7 +725,7 @@ function energyCard(k) {
     </div>`;
   return h;
 }
-const LAYERS = [['tags','Day tags'],['sleep','Sleep'],['nap','Naps'],['report','Your morning report'],['clock','Body clock'],['fuel','Food'],['water','Water'],['caffeine','Caffeine'],['alcohol','Alcohol'],['cannabis','Cannabis']];
+const LAYERS = [['tags','Day tags'],['sleep','Sleep'],['nap','Naps'],['report','Your morning report'],['clock','Body clock'],['fuel','Food'],['water','Water'],['caffeine','Caffeine'],['alcohol','Alcohol'],['cannabis','Cannabis'],['moments','Moments'],['pattern','Patterns'],['heat','Heat'],['you','Your energy checks']];
 function energySheet() { return `<div class="sheetbg" data-act="closesheet"><div class="sheet tall" role="dialog" aria-label="Energy breakdown" data-stop="1"><div class="row"><h3>Energy breakdown</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>${energyBreakdown()}</div></div>`; }
 function energyBreakdown() {
   const k = S.date, isToday = k === todayKey(); const e = energyFor(k, isToday ? Date.now() : dayEnd(k)); const c = e.cur;
@@ -723,7 +734,7 @@ function energyBreakdown() {
   return `<div class="row"><h3 style="margin:0">Energy ${c.score} · ${band(c.score).n}</h3><span class="chip info">model ${MODEL_VERSION}</span></div>
     <div class="row small"><span class="muted">Starting point</span><b>75</b></div>${groups}<div class="row"><b>Total</b><b>${c.score}</b></div>
     <details><summary class="small" style="font-weight:600">How this works</summary><div class="small muted howto">
-    <p>Fixed rules, no AI. Every 10 minutes from your wake time, the app adds up eight layers on top of 75 and keeps the result between 5 and 98. 70+ is green, 45–69 yellow, under 45 red.</p>
+    <p>Fixed rules, no AI. Every 10 minutes from your wake time, the app adds up its layers on top of 75 and keeps the result between 5 and 98. 70+ is green, 45–69 yellow, under 45 red.</p>
     <p><b>Sleep:</b> hours slept on a sliding scale (7.5–9 h best, every half hour less costs more, and the cost grows as the day goes on); debt from the 3 nights before; how far your sleep midpoint moved from your usual; going to bed after 3 AM.</p>
     <p><b>Morning report:</b> your three words. Body feel fades fastest (to 40% by 6 h awake), mood and sleep quality stay longer.</p>
     <p><b>Body clock:</b> grogginess for 30–60 min after waking (longer after short sleep), a peak ~3 h after waking, a dip ~7 h after waking, a second wind ~11 h, then wind-down after 13 h awake (faster with sleep debt).</p>
@@ -734,9 +745,13 @@ function energyBreakdown() {
     <p><b>Cannabis:</b> each session (hits within 30 min) gives a lift peaking at 15 min and gone by 45, then a couch phase from 40 min to 3.5 h. Bigger sessions hit harder but with diminishing returns. Your 7-day average is your tolerance: the more you smoke daily, the smaller both effects. Past 6 hits a day adds fog; hits after 9 PM cost you the next morning.</p>
     <p><b>Naps:</b> each nap gives grogginess right after waking (10 min for under 30 min, up to 40 min for over an hour), then a lift up to +10 that fades over ~5 h. A nap also resets part of your 'hours awake' clock (a 2 h nap resets 80%), so late-day tiredness starts later. Time asleep doesn't count toward 'food or water expected by now', and you get less hungry asleep. Naps count 70% toward sleep debt.</p>
     <p><b>Day tags:</b> sick −12 all day; stressed −5; travel −5; exam +4 for the first 8 h awake, then −4; party +4 in the evening and −6 the next morning, fading by midday.</p>
-    <p><b>Not counted:</b> cigarettes (your call) and training (no time recorded). Showers, 🌶️ and heat are recorded and get tested against your ratings on 16 Dec.</p>
+    <p><b>Moments:</b> cool shower +7 right after, gone in ~75 min. Hot shower +3 for 20 min, then −4 relaxed for about an hour. 🌶️ +3 for 20 min, then −7 relaxed, gone in 2 h.</p>
+    <p><b>Patterns:</b> eating within 2 h of bed costs −3 next morning (within 1 h, −5); caffeine still in you at bedtime costs up to −6 next morning; both halve when you've answered the morning questions (your sleep-quality answer already carries part of it) and fade by midday. Short sleep on nights 4–7 back costs up to −5 all day. Low mood, or bad sleep, 3+ mornings running: −3 each.</p>
+    <p><b>Heat:</b> Ahmedabad's average high for the month; above 34°C it costs up to −5 in the afternoon (11 AM–8 PM, worst at 3 PM), already softened for fan and cooler. Zero from Oct to Feb.</p>
+    <p><b>Your energy checks:</b> when you rate your energy, the curve is pulled 70% of the way toward what you said and lets go over 4 hours. The prediction stored for comparison leaves this out, so the model is still tested fairly.</p>
+    <p><b>Not counted:</b> cigarettes (your call) and training (no time recorded).</p>
     <p><b>Day split:</b> your waking day (wake-up to bedtime) is cut into three equal parts. 'So far' is the part already lived; 'forecast' assumes nothing else happens (no more food or water). Once the next morning's check-in gives your real bedtime, that day ends there.</p>
-    <p><b>Model ${MODEL_VERSION}, frozen until 16 Dec 2026.</b> Until then none of these numbers change, so the app's predictions can be compared fairly with your morning ratings. After that, the worst-matching layer gets adjusted, one layer at a time.</p></div></details>`;
+    <p><b>Model ${MODEL_VERSION} (from 19 Nov), frozen until 16 Dec 2026.</b> Until then none of these numbers change. On 16 Dec every layer is tested against your energy checks: layers that don't help get cut or re-weighted, one at a time.</p></div></details>`;
 }
 function energyCompareCard() {
   const ks = allKeys().filter(k => S.days[k]?.ci?.eRep && S.days[k]?.ci?.ePred).slice(-30);
