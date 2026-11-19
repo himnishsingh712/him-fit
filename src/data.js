@@ -97,6 +97,8 @@ export const ING = {
   rumali: {name:'Rumali roti (1 piece, ~54 g)', nova:3, v:{kcal:98,p:3,c:19.7,sug:0.08,fib:1.6,f:0.7,sat:0.13,chol:0,na:123,k:35,ca:4,mg:9,fe:0.37,zn:0.23,ph:35,se:9.38,vA:0,vD:0,vE:0.18,vK:0.19,vC:0,b1:0.04,b2:0.01,b3:0.42,b6:0.02,fol:7,b12:0,cho:4}},
   tandroti: {name:'Butter tandoori roti (1 piece, ~55 g)', nova:3, v:{kcal:180,p:5.55,c:30.14,sug:0.17,fib:4.5,f:5.23,sat:2.83,chol:12,na:365,k:153,ca:16,mg:58,fe:1.47,zn:1.05,ph:151,se:25.85,vA:36,vD:0.07,vE:0.42,vK:1.15,vC:0,b1:0.21,b2:0.07,b3:2.09,b6:0.17,fol:19,b12:0.01,cho:14}},
   kachori: {name:'Tea Post mini kachori (4 pieces, ~92 g)', nova:3, v:{kcal:380,p:7.43,c:33.44,sug:4.03,fib:2.44,f:24.09,sat:2.87,chol:0,na:658,k:256,ca:18,mg:39,fe:1.27,zn:0.74,ph:102,se:9.66,vA:0,vD:0,vE:4.67,vK:4.35,vC:0,b1:0.13,b2:0.04,b3:0.77,b6:0.1,fol:49,b12:0,cho:23}},
+  lays:     {name:"Lay's India's Magic Masala", nova:4, v:{kcal:538,p:6.9,c:53.4,sug:2.5,fib:3,f:33.1,sat:14.5,chol:0,na:993,k:1100,ca:20,mg:50,fe:1.2,zn:0.6,ph:140,se:2,io:0,vA:5,vD:0,vE:3,vK:15,vC:5,b1:0.1,b2:0.1,b3:3.5,b6:0.5,fol:30,b12:0,cho:15,o3:0}},
+  unclechips:{name:'Uncle Chipps Spicy Treat', nova:4, v:{kcal:536,p:6.4,c:54.6,sug:2,fib:3,f:32.4,sat:14.6,chol:0,na:868,k:1100,ca:20,mg:50,fe:1.2,zn:0.6,ph:140,se:2,io:0,vA:5,vD:0,vE:3,vK:15,vC:5,b1:0.1,b2:0.1,b3:3.5,b6:0.5,fol:30,b12:0,cho:15,o3:0}},
   cran:     {name:'Real Cranberry', nova:4, v:{kcal:56,c:13.6,sug:12.9,na:4.9,k:30,vC:10}},
 };
 
@@ -116,6 +118,8 @@ export const FOODS = [
   {id:'banana', name:'Banana', sub:'1 medium', parts:[['banana',118]]},
   {id:'cosmix', name:'Cosmix', sub:'1 scoop (38 g)', parts:[['cosmix',38]]},
   {id:'sattu', name:'Sattu', sub:'1 scoop (35 g)', parts:[['sattu',35]]},
+  {id:'lays', name:"Lay's Magic Masala (blue)", sub:'₹20 pack · 48 g', parts:[['lays',48]]},
+  {id:'unclechips', name:'Uncle Chipps Spicy Treat (green)', sub:'₹20 pack · 48 g', parts:[['unclechips',48]]},
   // ===== Outside foods (out:true) =====
   {id:'domslice', out:true, step:1, name:"Domino's Margherita", sub:'medium · per slice · 6 slices = whole (1,170 kcal)', parts:[['domslice',100]]},
   {id:'phslice', out:true, step:1, name:'Pizza Hut Margherita', sub:'medium Pan · per slice · 6 slices = whole (1,377 kcal)', parts:[['phslice',100]]},

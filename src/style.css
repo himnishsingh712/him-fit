@@ -147,3 +147,5 @@ input[type=date].field,input[type=time].field{appearance:none;-webkit-appearance
 .sx[style*="--bc"]{border:2px solid var(--bc)}.sx[style*="--bc"] .v{color:var(--bc)}
 .qadd{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.qadd .btn{padding:0 4px;font-size:13px;height:44px}
 .a7{display:block;text-align:right;font-size:11px;color:var(--muted);font-weight:500}
+.chipbtn{min-height:36px;border-radius:999px;border:1px solid var(--border);background:var(--tile);font-weight:600;font-size:13px;padding:0 12px;color:inherit}
+.chipbtn.on{border:2px solid var(--acc);background:#3A2A12;color:var(--acc);font-weight:700}

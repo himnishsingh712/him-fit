@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.8.2';
+const APP_VERSION = '1.9.0';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -214,7 +214,8 @@ function tapeProgress() {
 function ctxFor(k) { return {date: k, weights: weightList().filter(w => w.k <= k), intake: intakeList(), tape: tapeAt(k)}; }
 function plan(k = S.date) { const p = PROF(); if (!p) return null; const ck = weekStart(k) + '|' + DV + '|' + JSON.stringify(p); if (!planCache[ck]) planCache[ck] = computePlan(p, ctxFor(k)); return planCache[ck]; }
 const T = k => { const pl = plan(); if (pl && pl.targets[k] != null) return pl.targets[k]; return (CFG().targets && CFG().targets[k] != null) ? CFG().targets[k] : NMAP[k]?.t; };
-const waterTarget = () => plan()?.water || CFG().waterTargetMl;
+const SPORT_ML = {football: 750, racket: 500, gym: 500};
+const waterTarget = (k = S.date) => (plan()?.water || CFG().waterTargetMl) + sum((S.days[k]?.ci?.ev || []).map(x => SPORT_ML[x.k] || 0));
 let cfgDirty = false;
 async function saveConfig(cfg) {
   S.config = cfg; LS.set(lk('config'), cfg); cfgDirty = true; LS.set(lk('cfgDirty'), true); DV++; render();
@@ -346,7 +347,7 @@ function energyInput(k) {
   return {pattern, rateBias, events: (ci.ev || []).map(x => ({t: x.t, k: x.k})), rates: (ci.er || []).filter(r => r.v).map(r => ({t: r.t, v: r.v})),
     wake: st.wake, bed: st.bed, real: st.real, usualWakeMin: minOf(p.wake || '09:00'), usualBedMin: minOf(p.bed || '01:00'),
     priorSleep: [1, 2, 3].map(i => { const c = S.days[addDays(k, -i)]?.ci; return c?.sl != null ? c.sl + 0.7 * napHours(c) : null; }), report: ci.mc && !ci.mc.skipped && ci.mc.sq != null && ci.mc.mood != null && ci.mc.feel != null ? {sq: ci.mc.sq, mood: ci.mc.mood, feel: ci.mc.feel} : null,
-    naps: (ci.naps || []).map(n => ({s: n.s, e: n.e})), intakes, caffeine, water, hits: ci.hitsT || [], tags: ci.tags || [], yTags: y.ci?.tags || [], hitsAvg7: h7.length ? mean(h7) : 0, lastNight, targets: {kcal: T('kcal'), p: T('p'), water: waterTarget()}};
+    naps: (ci.naps || []).map(n => ({s: n.s, e: n.e})), intakes, caffeine, water, hits: ci.hitsT || [], tags: ci.tags || [], yTags: y.ci?.tags || [], yEvents: (y.ci?.ev || []).map(x => ({t: x.t, k: x.k})), hitsAvg7: h7.length ? mean(h7) : 0, lastNight, targets: {kcal: T('kcal'), p: T('p'), water: waterTarget()}};
 }
 // the bedtime you reported the next morning, if any (ends that day's curve)
 function realBedMs(k) { const nk = addDays(k, 1), mc = S.days[nk]?.ci?.mc; if (!mc || mc.skipped || !mc.bed) return null; const b = bedMs(nk, mc.bed), w = sleepTimes(k).wake; return b > w + 3600e3 ? b : null; }
@@ -512,14 +513,14 @@ function viewCheckin() {
 
   { const mc = ci.mc && !ci.mc.skipped ? ci.mc : null; const p = PROF() || {}; h += `<div class="card"><div class="row"><div><h2>Sleep last night</h2><div class="muted small">${ci.sl != null ? `<b>${ci.sl} h</b> · worked out from your times${napHours(ci) ? ` · <b>${(ci.sl + napHours(ci)).toFixed(1)} h</b> with naps` : ''}` : 'Set the times; hours are worked out for you'}</div></div></div><div class="g2"><label class="fl">Went to sleep<input class="field" type="time" value="${mc?.bed || p.bed || '01:00'}" data-act="sleeptime" data-f="bed"></label><label class="fl">Woke up<input class="field" type="time" value="${mc?.wake || p.wake || '09:00'}" data-act="sleeptime" data-f="wake"></label></div></div>`; }
   h += napCard(k);
-  h += `<div class="card"><h2>Day tags</h2>${tagRow(ci.tags || [], 'daytag')}<div class="muted small">Count in your energy score. Sick and travel days are left out of maintenance and insights.</div></div>`;
+  h += dayTagsCard(ci);
   h += `<div class="card"><h2>Trained today?</h2><div class="btns c2"><button class="btn ${ci.tr === true ? 'on' : ''}" data-act="trained" data-v="1">Yes</button><button class="btn ${ci.tr === false ? 'on' : ''}" data-act="trained" data-v="0">No</button></div>${ci.tr ? `<div class="row"><label for="burn" style="font-size:14px;font-weight:500">Rough calories burned</label><input id="burn" class="num" type="number" inputmode="numeric" min="0" max="3000" value="${ci.burn ?? ''}" placeholder="—" data-act="ci" data-f="burn"></div><div class="muted small">Recorded only. Your calorie target already allows for training.</div>` : ''}</div>`;
   h += `<div class="card"><div class="row"><div><h2>Bong hits</h2><div class="muted small">${hitsNote(k)}</div></div>${stepper('cistep', 'hits', ci.hits ?? '—')}</div>${hitsChainLine(k)}<div class="muted small">Tap + when you take them. 5+ taps in a row count as catching up: spread back at ~6 an hour (12 hits = last 2 h). Change it if they were spread out more.</div></div>`;
   h += `<div class="card"><div class="row"><h2>Cigarettes</h2>${stepper('cistep', 'cigs', ci.cigs ?? '—')}</div></div>`;
   { const ev = (ci.ev || []).slice().sort((a, b) => a.t - b.t);
-    h += `<div class="card"><h2>Moments</h2><div class="btns c3"><button class="btn" data-act="evadd" data-id="hot">🚿 Hot shower</button><button class="btn" data-act="evadd" data-id="cool">🚿 Cool shower</button><button class="btn" data-act="evadd" data-id="spicy">🌶️ Spicy time</button></div>
-      ${ev.length ? `<div class="list">${ev.map(x => `<div class="li"><div class="main"><div class="t">${EVN[x.k] || x.k}</div></div><input class="field" style="width:130px" type="time" value="${hhmm(x.t)}" data-act="evtime" data-id="${x.id}" aria-label="Time"><button class="iconbtn" data-act="evdel" data-id="${x.id}" aria-label="Remove">${ic('x',16)}</button></div>`).join('')}</div>` : ''}
-      <div class="muted small">Tap when it happens (or fix the time after). Counts in your energy score right away — see the energy breakdown for how much.</div></div>`; }
+    h += `<div class="card"><h2>Moments</h2><div class="btns c3">${['hot', 'cool', 'spicy'].map(id => `<button class="btn" data-act="evadd" data-id="${id}">${EVN[id]}${evCount(ev, id) ? ` ×${evCount(ev, id)}` : ''}</button>`).join('')}</div>
+      ${evList(ev, Object.keys(EVN))}
+      <div class="muted small">Each tap adds one at the current time — it never replaces an earlier one. Fix the time or remove it in the list. Counts in your energy score right away.</div></div>`; }
   const drinks = ci.drinks || [];
   h += `<div class="card"><div class="row"><h2>Drinks</h2><button class="pill" data-act="adddrink">+ Add drink</button></div>${drinks.length ? `<div class="list">${drinks.map(dr => { const v = drinkVec(dr); return `<div class="li"><div class="main"><div class="t">${esc(drinkLabel(dr))}</div><div class="s">${fmt(v.kcal,'kcal')} kcal · ${dr.k === 'caf' ? Math.round(v.caf || 0) + ' mg caffeine' : (stdDrinks({ci:{drinks:[dr]}})).toFixed(1) + ' standard drinks'}${dr.t ? ' · ' + tlabel(dr.t) : ''}</div></div><button class="iconbtn" data-act="deldrink" data-id="${dr.id}" aria-label="Remove drink">${ic('x',18)}</button></div>`; }).join('')}</div><div class="muted small">Total ${stdDrinks(d).toFixed(1)} standard drinks (10 g alcohol each). Calories count toward your day.</div>` : `<div class="muted small">None logged. ${ci.drinks ? '' : '<button class="btn" data-act="nodrinks" style="height:36px;margin-left:6px">Log “none today”</button>'}</div>`}</div>`;
   h += `</div>`;
@@ -613,10 +614,6 @@ function viewTrends() {
   const kv = keys.map(k => { const d = S.days[k]; if (!d || !(d.items || []).length) return {v: null, l: lab(k)}; const t = dayCalc(d).tot; return {v: t.kcal, l: lab(k), c: (t.p || 0) < T('p') ? 'var(--acc2)' : 'var(--acc)', p: t.p}; });
   const logged = kv.filter(x => x.v != null);
   h += `<div class="card"><div class="row"><h2>Calories &amp; protein</h2><span class="small muted">${logged.length ? `avg ${fmt(mean(logged.map(x => x.v)),'kcal')} kcal · ${fmt(mean(logged.map(x => x.p)),'g')} g` : ''}</span></div>${bars(kv, {line: T('kcal'), min: T('kcal'), label: 'Daily calories against target'})}<div class="muted small">Orange = protein under ${T('p')} g that day (${logged.filter(x => x.p < T('p')).length} of ${logged.length}). Dashed line = calorie target.</div></div>`;
-  // targets hit
-  const th = keys.map(targetsHit); const hit = th.filter(x => x === 2).length, lg = th.filter(x => x != null).length;
-  const cols = n <= 7 ? 7 : n <= 30 ? 10 : 15;
-  h += `<div class="card"><div class="row"><h2>Targets hit</h2><span class="big">${hit} <small>/ ${lg} logged days</small></span></div><div class="sq" style="grid-template-columns:repeat(${cols},1fr)">${th.map((x, i) => `<div title="${shortDate(keys[i])}" style="background:${x === 2 ? 'var(--ok)' : x === 1 ? 'var(--acc)' : x === 0 ? 'var(--over)' : 'var(--tile)'}"></div>`).join('')}</div><div class="muted small">Green = calories within 10% and protein hit · amber = one of the two · red = neither · dark = nothing logged</div></div>`;
   // substances
   const series = (f, c) => keys.map(k => { const v = f(S.days[k]); return {v: v == null ? null : v, l: lab(k), c}; });
   const hs = series(d => d?.ci?.hits, 'var(--water)'), hv = hs.filter(x => x.v != null).map(x => x.v);
@@ -629,15 +626,7 @@ function viewTrends() {
   h += `<div class="card"><div class="row"><h2>Alcohol</h2><span class="big">${av.length ? sum(av).toFixed(1) : '—'} <small>standard drinks</small></span></div>${av.some(x => x > 0) ? bars(as, {label: 'Standard drinks per day'}) : '<div class="muted small">No drinks logged.</div>'}<div class="muted small">${av.filter(x => x > 0).length} drinking days · ${fmt(akcal,'kcal')} kcal from drinks</div></div>`;
   const ss = series(d => d?.ci?.sl, 'var(--water)'), sv = ss.filter(x => x.v != null).map(x => x.v);
   h += `<div class="card"><div class="row"><h2>Sleep</h2><span class="big">${sv.length ? mean(sv).toFixed(1) + ' h' : '—'} ${sv.length && mean(sv) < 7 ? '<span class="chip close">LOW</span>' : ''}</span></div>${sv.length ? bars(ss, {line: 7, min: 9, label: 'Hours slept'}) : '<div class="muted small">Nothing logged.</div>'}<div class="muted small">${sv.length} nights logged · target 7–8 h</div></div>`;
-  const pp = keys.map(k => { const d = S.days[k]; if (!d || !(d.items || []).length) return {v: null, l: lab(k)}; return {v: dayCalc(d).processed, l: lab(k), c: 'var(--acc2)'}; }); const pv = pp.filter(x => x.v != null).map(x => x.v);
-  h += `<div class="card"><div class="row"><h2>Processed-food share</h2><span class="big">${pv.length ? Math.round(mean(pv)) + '%' : '—'} <small>of calories</small></span></div>${pv.length ? bars(pp, {min: 100, label: 'Ultra-processed share of calories'}) : ''}</div>`;
-  h += weekdayWeekendCard(keys);
   h += energyCompareCard();
-  // insights
-  const ins = insights(); const shown = ins.filter(x => x.show);
-  h += `<div class="card span2"><h2>Insights</h2>${shown.length ? shown.map(x => { const I = x.I; const dd = x.diff; const amt = I.yu === 'h' ? Math.abs(dd).toFixed(1) + ' h' : Math.round(Math.abs(dd)) + ' kcal'; const cond = I.bin ? `On days you drank` : `On days with more than ${x.cut % 1 ? x.cut.toFixed(1) : x.cut} ${I.x.toLowerCase()}`; const dir = I.yu === 'h' ? (dd < 0 ? 'less' : 'more') : (dd < 0 ? 'less' : 'more'); return `<div class="flag info"><div>${cond}, ${I.verb} <strong>${amt} ${dir}</strong> ${I.after}. <span class="muted">(${x.n} days, r = ${x.r.toFixed(2)})</span></div></div>`; }).join('') : '<div class="muted small">No strong patterns yet.</div>'}
-    <div class="muted small">Fixed method: a correlation is checked only with 14+ days where both values are logged, and shown only if it's at least moderate (|r| ≥ 0.4).</div>
-    <div class="list">${ins.map(x => `<div class="li"><div class="main"><div class="t" style="font-size:13px">${x.I.x} → ${x.I.y}</div></div><div class="num">${x.n >= 14 ? (x.show ? '<span class="chip ok">shown</span>' : `<span class="chip info">r ${x.r?.toFixed(2) ?? '—'}</span>`) : `<span class="muted">${x.n}/14 days</span>`}</div></div>`).join('')}</div></div>`;
   return h + '</div>';
 }
 function viewSupps() {
@@ -650,7 +639,6 @@ function viewSupps() {
   h += `<div class="card"><h2>Last 30 days</h2>${SUPPS.map(s => { const sch = last30.filter(x => suppDue(s.id, x)); const took = sch.filter(x => S.days[x]?.supp?.[s.id]).length; const pct = sch.length ? took / sch.length * 100 : 0; return sch.length ? `<div><div class="row small"><b>${esc(s.name)}</b><span>${took} / ${sch.length}</span></div><div class="bar" style="height:8px;margin-top:6px"><div style="width:${pct}%;background:${pct >= 85 ? 'var(--ok)' : 'var(--acc)'}"></div></div></div>` : ''; }).join('')}<div class="muted small">Counts only scheduled days since you started logging.</div></div>`;
   const up = (cfg.upcoming || []).filter(u => u.date >= todayKey()).sort((a, b) => a.date < b.date ? -1 : 1);
   h += `<div class="card"><h2>Coming up</h2>${up.length ? up.map(u => `<div class="row" style="justify-content:flex-start;align-items:flex-start"><b style="width:64px;flex:none;font-family:var(--head)">${shortDate(u.date)}</b><span class="small">${esc(u.text)}</span></div>`).join('') : '<div class="muted small">No scheduled changes.</div>'}</div>`;
-  h += `<div class="card"><h2>Change history</h2>${(cfg.changes || []).slice().sort((a, b) => a.date < b.date ? 1 : -1).map(c => `<div class="row small" style="justify-content:flex-start;align-items:flex-start"><span class="muted" style="width:64px;flex:none">${shortDate(c.date)}</span><span>${esc(c.text)}</span></div>`).join('') || '<div class="muted small">Nothing yet.</div>'}</div>`;
   // bloodwork
   const bw = cfg.bloodwork || {}; const reps = (bw.reports || []).slice().sort((a, b) => a.date < b.date ? 1 : -1);
   const markers = [...new Set(reps.flatMap(r => Object.keys(r.markers || {})))];
@@ -662,8 +650,21 @@ function viewSupps() {
 
 // ================= energy UI =================
 const BCOL = {g:'var(--ok)', y:'var(--acc)', r:'var(--over)'};
-const TAGS = [['exam','Exam'],['sick','Sick'],['party','Party'],['travel','Travel'],['stressed','Stressed']];
+// whole-day tags (on/off for the day) and timed tags (each tap logs one at that time)
+const TAGS = [['sick','Sick'],['stressed','Stressed'],['exam','Exam/deadline'],['party','Party']];
+const TIMED = {crashed: '😴 Crashed', great: '😊 Great mood', productive: '📚 Productive', gym: '🏋️ Gym', football: '⚽ Football', racket: '🏸 Racket', chill: '🎧 Chill'};
+const TAG_GROUPS = [['Body', [['sick', 0], ['crashed', 1]]], ['Mood', [['stressed', 0], ['great', 1]]], ['Day', [['exam', 0], ['party', 0], ['productive', 1]]], ['Active', [['gym', 1], ['football', 1], ['racket', 1]]], ['Chill', [['chill', 1]]]];
+const TAGN = Object.fromEntries(TAGS);
 const tagRow = (on, act) => `<div class="seg5">${TAGS.map(([id, n]) => `<button class="${on.includes(id) ? 'on' : ''}" data-act="${act}" data-id="${id}">${n}</button>`).join('')}</div>`;
+function evList(ev, keys) { const xs = (ev || []).filter(x => keys.includes(x.k)).sort((a, b) => a.t - b.t); if (!xs.length) return '';
+  return `<div class="small" style="font-weight:600;margin-top:4px">Logged today</div><div class="list">${xs.map(x => `<div class="li"><div class="main"><div class="t">${EVN[x.k] || TIMED[x.k] || x.k}</div></div><input class="field" style="width:130px" type="time" value="${hhmm(x.t)}" data-act="evtime" data-id="${x.id}" aria-label="Time"><button class="iconbtn" data-act="evdel" data-id="${x.id}" aria-label="Remove">${ic('x',16)}</button></div>`).join('')}</div>`; }
+const evCount = (ev, k) => (ev || []).filter(x => x.k === k).length;
+function dayTagsCard(ci) { const on = ci.tags || [];
+  return `<div class="card"><h2>Day tags</h2>${TAG_GROUPS.map(([g, xs]) => `<div class="row" style="justify-content:flex-start;gap:8px;flex-wrap:wrap;margin:4px 0"><span class="small muted" style="width:52px;flex:none">${g}</span>${xs.map(([id, timed]) => timed
+      ? `<button class="chipbtn" data-act="evadd" data-id="${id}">${TIMED[id]}${evCount(ci.ev, id) ? ` ×${evCount(ci.ev, id)}` : ''}</button>`
+      : `<button class="chipbtn ${on.includes(id) ? 'on' : ''}" data-act="daytag" data-id="${id}">${TAGN[id]}</button>`).join('')}</div>`).join('')}
+    ${evList(ci.ev, Object.keys(TIMED))}
+    <div class="muted small">Sick, Stressed, Exam/deadline and Party are for the whole day (tap again to turn off). The others log the time you tap them — each tap adds one; fix the time or remove it below. All count in your energy score. Sick days are left out of maintenance.</div></div>`; }
 const WORDS = {sq:['Terrible','Poor','Okay','Good','Great'], mood:['Low','Irritable','Okay','Good','Great'], feel:['Drained','Heavy','Okay','Light','Energetic']};
 const hhmm = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const tlabel = ms => new Date(ms).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
@@ -711,7 +712,7 @@ function energyCurve(e, now) {
   e.inp.intakes.filter(x => x.alc).forEach(x => s += evt(x.t, 'var(--over)', 3.5));
   const RY = RATE_SCORE;
   (e.rates || []).forEach(r => { if (r.v && r.t >= t0 && r.t <= t1) { const x = X(r.t), y = Y(RY[r.v]); s += `<rect x="${(x - 4).toFixed(1)}" y="${(y - 4).toFixed(1)}" width="8" height="8" transform="rotate(45 ${x.toFixed(1)} ${y.toFixed(1)})" fill="var(--text)" stroke="var(--card)" stroke-width="1.5"><title>You: ${RATE_W[r.v - 1]}</title></rect>`; } });
-  (e.evs || []).forEach(x => { if (x.t >= t0 && x.t <= t1) s += `<text x="${X(x.t).toFixed(1)}" y="${H - 2}" text-anchor="middle" font-size="11">${x.k === 'spicy' ? '🌶️' : '🚿'}</text>`; });
+  (e.evs || []).forEach(x => { if (x.t >= t0 && x.t <= t1) s += `<text x="${X(x.t).toFixed(1)}" y="${H - 2}" text-anchor="middle" font-size="11">${(EVN[x.k] || TIMED[x.k] || '•').split(' ')[0]}</text>`; });
   if (now >= t0 && now <= t1) { const c = e.cur; s += `<line x1="${X(now)}" x2="${X(now)}" y1="0" y2="${H}" stroke="var(--text)" stroke-opacity=".25"/><circle cx="${X(now)}" cy="${Y(c.score)}" r="5" fill="${BCOL[band(c.score).c]}" stroke="var(--card)" stroke-width="2"/>`; }
   return s + '</svg>';
 }
@@ -721,7 +722,7 @@ function energyCard(k) {
   const top = [...c.parts].sort((x, y) => Math.abs(y.v) - Math.abs(x.v)).filter(x => Math.abs(x.v) >= 1.5).slice(0, 4);
   const ph = e.phases.filter(x => x.v);
   let h = `<div class="card span2 ecard"><div class="row"><div><h2>Energy</h2><div class="muted small">${isToday ? `now · ${tlabel(Date.now())}` : 'end of day'}${e.inp.real ? '' : ' · estimated, no morning check-in'}</div></div><button class="escore" data-act="energyinfo" style="--bc:${BCOL[b.c]}" aria-label="Energy ${c.score}, ${b.n}. Open breakdown"><b>${c.score}</b><span>${b.n}</span></button></div>
-    ${energyCurve(e, now)}<div class="elegend small muted"><span><i style="background:var(--acc2)"></i>food</span><span><i style="background:var(--water)"></i>caffeine</span><span><i style="background:var(--muted)"></i>hits</span><span><i style="background:var(--over)"></i>alcohol</span><span>◆ your rating</span><span>🚿 🌶️ moments</span><span>dashed = forecast if nothing changes</span></div>
+    ${energyCurve(e, now)}<div class="elegend small muted"><span><i style="background:var(--acc2)"></i>food</span><span><i style="background:var(--water)"></i>caffeine</span><span><i style="background:var(--muted)"></i>hits</span><span><i style="background:var(--over)"></i>alcohol</span><span>◆ your rating</span><span>🚿 🌶️ ⚽ moments &amp; tags</span><span>dashed = forecast if nothing changes</span></div>
     <div class="phases">${ph.map(x => { const bb = band(x.v.score); return `<div class="ph ${x.v.now ? 'now' : ''}"><div class="l">${x.n}</div><div class="v" style="color:${BCOL[bb.c]}">${x.v.score}</div><div class="s">${x.v.past ? bb.n : x.v.now ? 'so far · ' + bb.n.toLowerCase() : 'forecast'}</div><div class="s muted">${tlabel(x.v.from).replace(':00', '')}–${tlabel(x.v.to).replace(':00', '')}</div></div>`; }).join('')}</div>
     <div class="why">${top.map(x => `<div class="row small"><span>${esc(x.label)}</span><b style="color:${x.v > 0 ? 'var(--ok)' : 'var(--over)'}">${x.v > 0 ? '+' : '−'}${Math.abs(x.v).toFixed(0)}</b></div>`).join('')}</div>
     ${isToday && e.help.length ? `<div class="help">${e.help.map(x => `<div class="flag info"><div><strong>${esc(x.label)}</strong> → about +${x.gain} within 90 min</div></div>`).join('')}</div>` : ''}
@@ -747,7 +748,8 @@ function energyBreakdown() {
     <p><b>Alcohol:</b> 1–2 drinks give a short lift, then every standard drink sedates for ~4 h. Last night's drinks cost you in the morning and fade by evening.</p>
     <p><b>Cannabis:</b> each session (hits within 30 min) gives a lift peaking at 15 min and gone by 45, then a couch phase from 40 min to 3.5 h. Bigger sessions hit harder but with diminishing returns. Your 7-day average is your tolerance: the more you smoke daily, the smaller both effects. Past 6 hits a day adds fog; hits after 9 PM cost you the next morning.</p>
     <p><b>Naps:</b> each nap gives grogginess right after waking (10 min for under 30 min, up to 40 min for over an hour), then a lift up to +10 that fades over ~5 h. A nap also resets part of your 'hours awake' clock (a 2 h nap resets 80%), so late-day tiredness starts later. Time asleep doesn't count toward 'food or water expected by now', and you get less hungry asleep. Naps count 70% toward sleep debt.</p>
-    <p><b>Day tags:</b> sick −12 all day; stressed −5; travel −5; exam +4 for the first 8 h awake, then −4; party +4 in the evening and −6 the next morning, fading by midday.</p>
+    <p><b>Day tags (whole day):</b> sick −12 all day and −4 the next morning; stressed −5; exam/deadline +4 for the first 8 h awake, then −4; party +4 in the evening and −6 the next morning, fading by midday.</p>
+    <p><b>Day tags (timed, from when you tap):</b> crashed −8 easing off over 3 h; great mood +4 for 3 h; productive +1 for 1 h then −3 for 3 h; gym +5 for 1.5 h then −3 (2–5 h after); football +5 for 1 h then −6 (1.5–5 h after) and −3 next morning; racket +5 for 1 h then −3 (1.5–4 h after); chill +3 for 3 h. Any sport within 2 h of bedtime: −3 next morning. Sport also raises that day's water target (football +750 ml, racket and gym +500 ml). All tags together are capped at ±15.</p>
     <p><b>Moments:</b> cool shower +7 right after, gone in ~75 min. Hot shower +3 for 20 min, then −4 relaxed for about an hour. 🌶️ +3 for 20 min, then −7 relaxed, gone in 2 h.</p>
     <p><b>Patterns:</b> eating within 2 h of bed costs −3 next morning (within 1 h, −5); caffeine still in you at bedtime costs up to −6 next morning; both halve when you've answered the morning questions (your sleep-quality answer already carries part of it) and fade by midday. Short sleep on nights 4–7 back costs up to −5 all day. Low mood, or bad sleep, 3+ mornings running: −3 each.</p>
     <p><b>Your energy checks:</b> a nudge, not an override. Your rating is read on your own scale (after 10 checks the app learns how your ratings usually sit against the model). If it's within 8 points of the model, nothing changes. Beyond that the score moves 30% of the extra gap, never more than ±10, fading to nothing over 3 hours — and only half that if the model has strong reasons (score 40 or under, or 80 or over) and your rating points the other way. The prediction stored for comparison leaves this out, so the model is still tested fairly.</p>
@@ -837,16 +839,6 @@ function weeklyReviewCard(ws, dismiss) {
     ${days.length >= 2 ? `<div class="small">Best energy: <b>${DOW[parseKey(days[0].k).getDay()]} (${days[0].e})</b> · worst: <b>${DOW[parseKey(days[days.length-1].k).getDay()]} (${days[days.length-1].e})</b></div>` : ''}
     ${lows.length ? `<div class="small">Low all week: ${lows.map(x => esc(x.n)).join(', ')}</div>` : ''}${tc ? `<div class="small muted">${esc(tc.text)}</div>` : ''}</div>`;
 }
-function weekdayWeekendCard(keys) {
-  const wd = keys.filter(k => { const g = parseKey(k).getDay(); return g >= 1 && g <= 5; }), we = keys.filter(k => { const g = parseKey(k).getDay(); return g === 0 || g === 6; });
-  const a = weekStats(wd), b = weekStats(we);
-  if (a.logged < 3 || b.logged < 2) return `<div class="card span2"><h2>Weekdays vs weekends</h2><div class="muted small">Needs 3 logged weekdays and 2 logged weekend days in this range (${a.logged} and ${b.logged} so far).</div></div>`;
-  const row = (l, x, y, f) => `<div class="row small"><span>${l}</span><span><b>${x == null ? '—' : f(x)}</b> <span class="muted">vs</span> <b>${y == null ? '—' : f(y)}</b></span></div>`;
-  return `<div class="card span2"><div class="row"><h2>Weekdays vs weekends</h2><span class="small muted">Mon–Fri vs Sat–Sun</span></div>
-    ${row('Calories', a.kcal, b.kcal, v => fmt(v,'kcal'))}${row('Protein', a.p, b.p, v => fmt(v,'g') + ' g')}${row('Sleep', a.sleep, b.sleep, v => v.toFixed(1) + ' h')}${row('Bedtime', a.bed, b.bed, v => v)}
-    ${row('Bong hits / day', a.hits, b.hits, v => v.toFixed(1))}${row('Caffeine', a.caf, b.caf, v => Math.round(v) + ' mg')}${row('Energy (app)', a.epred, b.epred, v => Math.round(v))}</div>`;
-}
-// ---- target change log: one line per weekly change, saved to the change history
 function targetChange(k = todayKey()) {
   const cur = plan(k), prev = plan(addDays(weekStart(k), -1)); if (!cur || !prev) return null;
   const dk = cur.targets.kcal - prev.targets.kcal, dp = cur.targets.p - prev.targets.p; if (Math.abs(dk) < 10 && Math.abs(dp) < 5) return null;
@@ -942,6 +934,7 @@ function viewMe() {
       <div class="row big2"><span>Daily target</span><b>${fmt(pl.targets.kcal,'kcal')} kcal</b></div></div></div>`;
   const tg = pl.targets; const tc = targetChange(k);
   if (tc) h += `<div class="flag info span2"><div><strong>This week:</strong> ${esc(tc.text)}</div></div>`;
+  h += `<div class="card span2"><div class="row"><span></span><a href="#" class="small muted" data-act="histsheet">Target history ›</a></div></div>`;
   h += `<div class="card span2"><h2>Daily targets</h2><div class="tiles t3">
     ${tl('Protein', tg.p + ' g', `${GMAP[p.goal].prot} g per kg`)}${tl('Carbs', tg.c + ' g', 'the rest of your calories')}${tl('Fat', `${pl.fatMin}–${tg.f} g`, 'min 0.8 g/kg · max 30%')}
     ${tl('Fibre', tg.fib + ' g', '14 g per 1,000 kcal')}${tl('Water', (pl.water / 1000).toFixed(2).replace(/0$/, '') + ' L', '35 ml/kg + training')}${tl('Sat. fat', '≤ ' + tg.sat + ' g', 'max 10% of calories')}</div>
@@ -962,6 +955,7 @@ function viewMe() {
 // ================= sheets =================
 function sheetHTML() {
   const sh = S.sheet; if (!sh) return '';
+  if (sh.type === 'hist') { const cfg = CFG(); return `<div class="sheetbg" data-act="closesheet"><div class="sheet tall" role="dialog" aria-label="Target history" data-stop="1"><div class="row"><h3>Target history</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div><div class="muted small">Every change to your daily targets, with the reason. Written automatically.</div>${(cfg.changes || []).slice().sort((a, b) => a.date < b.date ? 1 : -1).map(c => `<div class="row small" style="justify-content:flex-start;align-items:flex-start"><span class="muted" style="width:64px;flex:none">${shortDate(c.date)}</span><span>${esc(c.text)}</span></div>`).join('') || '<div class="muted small">No changes yet.</div>'}</div></div>`; }
   if (sh.type === 'item') {
     const d = day(S.date); const it = d.items.find(x => x.id === sh.id); if (!it) return '';
     const f = FMAP[it.f]; const v = itemVec(it);
@@ -1111,7 +1105,7 @@ document.addEventListener('click', e => {
     case 'itemsauce': { const it = d.items.find(x => x.id === id); if (it) { it.o = {...(it.o || {}), [el.dataset.k]: n}; touch(k); } break; }
     case 'rate': { const dd = day(todayKey()); dd.ci = dd.ci || {}; dd.ci.er = (dd.ci.er || []).filter(r => r.s !== n); let m = null; try { m = energyFor(todayKey(), Date.now(), {noRates: true}).cur.score; } catch (er) {} dd.ci.er.push({s: n, v: +el.dataset.v, t: Date.now(), m}); touch(todayKey()); toast('Thanks — noted'); break; }
     case 'rateskip': { e.preventDefault(); const dd = day(todayKey()); dd.ci = dd.ci || {}; dd.ci.er = (dd.ci.er || []).filter(r => r.s !== n); dd.ci.er.push({s: n, v: null, t: Date.now()}); touch(todayKey()); break; }
-    case 'evadd': { d.ci = d.ci || {}; d.ci.ev = d.ci.ev || []; const t = k === todayKey() ? Date.now() : mealTime(k, 'esnack'); d.ci.ev.push({id: uid(), k: id, t}); touch(k); toast(`${EVN[id]} · ${tlabel(t)}`); break; }
+    case 'evadd': { d.ci = d.ci || {}; d.ci.ev = d.ci.ev || []; const t = k === todayKey() ? Date.now() : mealTime(k, 'esnack'); d.ci.ev.push({id: uid(), k: id, t}); touch(k); toast(`Logged ${EVN[id] || TIMED[id]} at ${tlabel(t)}`); break; }
     case 'evdel': { d.ci.ev = (d.ci?.ev || []).filter(x => x.id !== id); touch(k); break; }
     case 'param': { const f = FMAP[id]; const c = S.cart[id]; const pk = f.param.key; c.o[pk] = Math.min(f.param.max, Math.max(f.param.min, (c.o[pk] ?? f.param.def) + n)); render(); break; }
     case 'dosa': { const m = el.dataset.m; const c = S.cart.dosa || (S.cart.dosa = {q: 0, o: {}}); if (m === 'n') { S.dosaMode = 'n'; c.q = Math.max(c.q, 1); } else { S.dosaMode = null; c.q = c.q === +m ? 0 : +m; } render(); break; }
@@ -1131,6 +1125,7 @@ document.addEventListener('click', e => {
     case 'mcsave': saveMorning(k); toast('Morning check-in saved'); break;
     case 'mcskip': e.preventDefault(); d.ci = d.ci || {}; d.ci.mc = {skipped: true, t: Date.now()}; S.mc = null; touch(k); break;
     case 'energyinfo': e.preventDefault(); S.sheet = {type: 'energy'}; render(); break;
+    case 'histsheet': e.preventDefault(); S.sheet = {type: 'hist'}; render(); break;
     case 'dcat': { const c = el.dataset.id; Object.assign(S.sheet, c === 'alc' ? {cat: c, d: 'beer5', ml: 330, m: 'none', mml: 0} : {cat: c, d: CAFF.find(x => x.cat === c).id, shots: null, sugar: c === 'tea' ? 1 : 0, size: null}); if (c !== 'alc') { const cc = CMAP[S.sheet.d]; S.sheet.shots = cc.shots || null; S.sheet.size = cc.sizes ? cc.sizes[0] : null; } render(); break; }
     case 'cpick': { const cc = CMAP[id]; S.sheet.d = id; S.sheet.shots = cc.shots || null; S.sheet.size = cc.sizes ? cc.sizes[0] : null; S.sheet.sugar = id === 'chai' ? 1 : 0; render(); break; }
     case 'cshots': S.sheet.shots = Math.min(4, Math.max(1, (S.sheet.shots || 1) + n)); render(); break;

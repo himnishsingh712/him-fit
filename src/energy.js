@@ -161,6 +161,22 @@ export function energyAt(inp, t) {
   if (tg.includes('exam')) add('tags', 'exam', a < 8 ? 'Exam adrenaline' : 'After the exam', a < 8 ? 4 : -4);
   if (tg.includes('party') && a >= 10) add('tags', 'party', 'Party night', 4);
   if ((inp.yTags || []).includes('party')) add('tags', 'yparty', "Last night's party", -6 * clamp(1 - a / 6, 0, 1));
+  if ((inp.yTags || []).includes('sick') && !tg.includes('sick')) add('tags', 'ysick', 'Still recovering from being sick', -4 * clamp(1 - a / 6, 0, 1));
+  // timed tags: effect runs from the time you tapped them
+  const TT = {
+    crashed: ['Crashed', m => -8 * hump(m, -1, 10, 180)],
+    great: ['Great mood', m => 4 * hump(m, -1, 15, 180)],
+    productive: ['Productive (mental work)', m => 1 * hump(m, -1, 20, 60) - 3 * hump(m, 60, 120, 240)],
+    gym: ['Gym', m => 5 * hump(m, -1, 20, 90) - 3 * hump(m, 120, 180, 300)],
+    football: ['Football', m => 5 * hump(m, -1, 15, 60) - 6 * hump(m, 90, 180, 300)],
+    racket: ['Racket sport', m => 5 * hump(m, -1, 15, 60) - 3 * hump(m, 90, 150, 240)],
+    chill: ['Chill', m => 3 * hump(m, -1, 30, 180)],
+  };
+  (inp.events || []).forEach(ev => { const f = TT[ev.k]; if (!f) return; const mm = (t - ev.t) / MIN; if (mm < 0 || mm > 300) return; add('tags', 'tt_' + ev.k, f[0], f[1](mm)); });
+  const SPORT = ['gym', 'football', 'racket'], ye = inp.yEvents || [], fadeM = clamp(1 - a / 6, 0, 1);
+  if (ye.some(x => x.k === 'football')) add('tags', 'yfootball', "Yesterday's football", -3 * fadeM);
+  if (ye.some(x => SPORT.includes(x.k) && x.t <= inp.bed && inp.bed - x.t < 2 * H)) add('tags', 'latesport', 'Hard exercise close to bedtime', -3 * fadeM);
+  { const ts = R.filter(x => x.layer === 'tags').reduce((s, x) => s + x.v, 0); if (Math.abs(ts) > 15) add('tags', 'tagcap', 'Day tags capped at ±15', Math.sign(ts) * 15 - ts); }
   // ---- 11 moments
   (inp.events || []).forEach(ev => { const mm = (t - ev.t) / MIN; if (mm < 0 || mm > 180) return;
     if (ev.k === 'cool') add('moments', 'cool', 'Cool shower', 7 * hump(mm, 0, 5, 75));
