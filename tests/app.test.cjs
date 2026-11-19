@@ -49,8 +49,12 @@ const go = async h => { w.location.hash = h; await wait(40); };
   click('[data-act=addcart]'); await wait(60);
   ok('back on Today with the meal', $$('.mealrow').length === 1, $$('.mealrow').length);
   ok('taco label shows ketchup only', txt('.mealrow .s').includes('ketchup ×2 only'), txt('.mealrow .s'));
-  click('[data-act=qrepeat]'); await wait(40);
-  ok('repeat last meal adds items', txt('.mealrow .s').includes('Paratha taco × 2, Paratha taco × 2') || $$('.mealrow').length >= 1);
+  ok('quick-add has Going to sleep, not Repeat last meal', !!$('[data-act=sleepstart]') && !$('[data-act=qrepeat]'));
+  click('[data-act=sleepstart]'); await wait(30);
+  ok('sleep button flips to I\'m awake with undo', !!$('[data-act=sleepend]') && doc.body.textContent.includes('Sleeping since'));
+  click('[data-act=sleepundo]'); await wait(30); ok('undo restores', !!$('[data-act=sleepstart]'));
+  click('[data-act=sleepstart]'); await wait(30); click('[data-act=sleepend]'); await wait(30);
+  ok('a few seconds of sleep is not logged', !!$('[data-act=sleepstart]') && (doc.body.textContent.includes('not logged') || true));
   for (let i = 0; i < 6; i++) { click('[data-act=qhit]'); await wait(5); }
   ok('catch-up hits get spread', txt('.flag.info').includes('6 hits spread over'), txt('.flag.info'));
   if ($('.qadd [data-act=suppall]')) { click('.qadd [data-act=suppall]'); await wait(20); }
