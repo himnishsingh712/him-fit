@@ -129,3 +129,8 @@ All raw logs are kept, so v1 and v2 can both be re-run over the same days on 16 
 ## v1.11.0 — Meals on Today, one place to add and fix food
 - Today's "Meals" card lists every meal with a **+**. Items show under their meal with their own **− / +** (− at the last step removes the item). Tap an item's name to change time or meal.
 - **+** opens the food list for that meal. Counters show what's already in **that meal** (not the day total); + adds, − removes, nothing changes until **Done** (e.g. "Done · Lunch: +1 roti, −2 paratha taco"). Removals come off the most recent entries of that food in that meal. Switching meal clears pending removals.
+
+## v1.12.0 — Meals page; Today without meals
+- Today no longer lists meals (calories/protein snapshot stays).
+- The orange + opens **Meals**: every meal with a +, and one line per food under it (kcal · protein). Tap a line to change amount, time or meal, or remove it. Caffeine drinks listed below with ✕.
+- A meal's + opens **Add to <meal>**: no meal buttons, no time field; counters always start at 0 (add only); coffee/tea/energy drinks and "Repeat yesterday's <meal>" are at the top. Food is saved at the time you add it (past days: the meal's usual time). Done returns to Meals.
