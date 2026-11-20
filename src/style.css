@@ -164,3 +164,4 @@ button.li.linkish{padding:8px 0;align-items:center;gap:10px}
 .top .pill.on2{background:#3A2A12;color:var(--acc);border:2px solid var(--acc)}
 .qadd .btn{white-space:nowrap;font-size:13px;padding:0 4px}
 .grid .qadd button.btn{font-size:13px;padding:0 4px;white-space:nowrap;letter-spacing:-0.2px}
+.grid .qadd button.qi{display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;font-weight:700}

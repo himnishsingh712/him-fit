@@ -44,6 +44,10 @@ const ICON = {
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
   user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   lift:'<path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/>',
+  bong:'<path d="M10 2.5h3.5M10.6 2.5v8.2M12.9 2.5v8.2M10.6 10.7a4.6 4.6 0 1 0 2.3 0M15.2 14.2l3-2.2M8 20.6h8.6"/><path d="M17.4 7.2c.9-.9-.3-1.8.6-2.7M19.6 9c.9-.9-.3-1.8.6-2.7"/>',
+  pushup:'<circle cx="4.6" cy="9.4" r="1.6"/><path d="M6.4 10.2l13 3.2M8.4 10.9l-.6 4.6M19.4 13.4l1.2 1.9M2.5 17.2h19"/>',
+  squat:'<circle cx="11.5" cy="3.8" r="1.6"/><path d="M11.4 5.8l-.9 5.4 4.6 1.8-1 5.4M10.7 7.6h6M13.6 18.4h2M6.5 20.6h12"/>',
+  mobility:'<circle cx="12" cy="3.9" r="1.6"/><path d="M12 6v7.2M12 7.6l-4.2-4.2M12 7.6l4.2-4.2M12 13.2l-4.4 7.2M12 13.2l4.4 7.2"/>',
 };
 const ic = (n, s=22, w=2) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 
@@ -144,7 +148,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.16.1';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -894,7 +898,7 @@ function todayStrip(k, tot) {
 }
 function quickAdd(k) {
   // one-tap actions that change your energy right away; each push-up / squat tap is one set in Training
-  return `<div class="span2 qadd" style="grid-template-columns:repeat(4,minmax(0,1fr))"><button class="btn" data-act="qhit">+1 hit</button><button class="btn" data-act="qtr" data-id="pushup" data-n="10">+10 push‑ups</button><button class="btn" data-act="qtr" data-id="bwsquat" data-n="25">+25 squats</button><button class="btn" data-act="qmob">+1 mobility</button></div>${sleepStartAt() ? `<div class="span2 muted small" style="text-align:center">Sleeping since ${tlabel(sleepStartAt())} · <a href="#" data-act="sleepundo">Undo</a></div>` : ''}`;
+  return `<div class="span2 qadd" style="grid-template-columns:repeat(4,minmax(0,1fr))"><button class="btn qi" data-act="qhit" aria-label="Add 1 bong hit">${ic('bong', 28, 1.8)}<span>+1</span></button><button class="btn qi" data-act="qtr" data-id="pushup" data-n="10" aria-label="Add 10 push-ups">${ic('pushup', 30, 1.8)}<span>+10</span></button><button class="btn qi" data-act="qtr" data-id="bwsquat" data-n="25" aria-label="Add 25 squats">${ic('squat', 28, 1.8)}<span>+25</span></button><button class="btn qi" data-act="qmob" aria-label="Log mobility">${ic('mobility', 28, 1.8)}</button></div>${sleepStartAt() ? `<div class="span2 muted small" style="text-align:center">Sleeping since ${tlabel(sleepStartAt())} · <a href="#" data-act="sleepundo">Undo</a></div>` : ''}`;
 }
 function lastSitting() {
   for (const k of [todayKey(), addDays(todayKey(), -1)]) { const its = (S.days[k]?.items || []).filter(it => it.t).sort((a, b) => a.t - b.t); if (its.length) { const t = its[its.length-1].t; return its.filter(it => t - it.t <= 20 * 60e3); } }
