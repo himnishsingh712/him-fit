@@ -137,6 +137,11 @@ const go = async h => { w.location.hash = h; await wait(40); };
   ok('offline: saved on phone', txt('#sync').includes('Offline'));
   w.__online = true; w.dispatchEvent(new w.Event('online')); await wait(400);
   ok('back online: synced', (w.__mock.db.days.find(r => r.data.water)?.data.water || 0) >= 500, w.__mock.db.days.map(r => r.data.water));
+  await go('#today'); ok('date arrows on Today', $$('[data-act=day]').length === 2);
+  for (const h of ['#nutrients', '#meals', '#training', '#checkin', '#energy']) { await go(h); ok(`no date arrows on ${h}`, $$('[data-act=day]').length === 0 && !!$('.datenav2.ro .sub')); }
+  await go('#today'); click('[data-act=day][data-n="-1"]'); await wait(20); await go('#training');
+  ok('past day from Today carries to Training (read-only, links to Today)', !!$('a.pastday[href="#today"]') && txt('a.pastday').includes('Viewing'));
+  await go('#today'); click('[data-act=gotoday]'); await wait(20);
   await go('#supplements'); ok('supplements page still reachable', doc.body.textContent.includes('Last 30 days'));
   click('#sync'); await wait(20); click('[data-act=signout]'); await wait(40); ok('sign out', !!$('#authform'));
 } catch (e) { fails++; console.log('EXC', e.message); }
