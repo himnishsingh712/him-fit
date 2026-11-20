@@ -181,3 +181,6 @@ Check-in's "Sleep last night" and "Naps" cards are one **Sleep** card: night sle
 
 ## v1.17.1 — Date arrows only on Today
 The ‹ date › arrows appear only on Today. The date picked there applies to every screen (Nutrients, Meals, Training, Check-in, Energy, Supplements). Other screens show the date read-only; on a past day it reads "Viewing <date> · change on Today" in amber and taps through to Today. Trends and Me show no date.
+
+## v1.17.2 — Edit no longer touches your weigh-ins
+Before, Edit → Save pre-filled "Weight today" with the latest *corrected* weight and wrote it back over that day's raw scale number whenever it differed, so every save shrank the weigh-in (up to 1.4%), and a save on a day without a weigh-in invented one. Now the field pre-fills the raw scale number, and Save logs a weigh-in (with the current time) only if you typed a different number, or on first setup. 19 Nov's reading was restored to the scale's 70.0 kg.
