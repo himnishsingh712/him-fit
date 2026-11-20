@@ -154,7 +154,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.17.3';
+const APP_VERSION = '1.17.4';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -793,7 +793,7 @@ function viewSupps() {
   // bloodwork
   const bw = cfg.bloodwork || {}; const reps = (bw.reports || []).slice().sort((a, b) => a.date < b.date ? 1 : -1);
   const markers = [...new Set(reps.flatMap(r => Object.keys(r.markers || {})))];
-  h += `<div class="card span2"><div class="row"><h2>Bloodwork</h2>${bw.nextDue ? `<span class="chip close">Next due ${shortDate(bw.nextDue)}</span>` : '<span class="chip close">Not done yet</span>'}</div>${reps.length ? `<div style="overflow-x:auto"><table class="bw"><thead><tr><th>Marker</th>${reps.slice(0, 4).map(r => `<th>${shortDate(r.date)}</th>`).join('')}</tr></thead><tbody>${markers.map(m => `<tr><td>${esc(m)}</td>${reps.slice(0, 4).map(r => { const x = r.markers[m]; return `<td>${x == null ? '—' : esc(typeof x === 'object' ? `${x.v} ${x.u || ''}${x.flag ? ' · ' + x.flag : ''}` : x)}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` : '<div class="muted small">No reports yet. Pending: CBC, ferritin, vitamin D, B12, TSH, HbA1c.</div>'}<div class="muted small">Download the PDF from Tata 1mg and upload it in a chat with Claude. Agreed changes to targets and supplements show up here.</div></div>`;
+  h += `<div class="card span2"><div class="row"><h2>Bloodwork</h2>${bw.nextDue ? `<span class="chip close">Next due ${shortDate(bw.nextDue)}</span>` : (reps.length ? '<span class="chip close">Next test not booked</span>' : '<span class="chip close">Not done yet</span>')}</div>${reps.length ? `<div style="overflow-x:auto"><table class="bw"><thead><tr><th>Marker</th>${reps.slice(0, 4).map(r => `<th>${shortDate(r.date)}</th>`).join('')}</tr></thead><tbody>${markers.map(m => `<tr><td>${esc(m)}</td>${reps.slice(0, 4).map(r => { const x = r.markers[m]; return `<td>${x == null ? '—' : esc(typeof x === 'object' ? `${x.v} ${x.u || ''}${x.flag ? ' · ' + x.flag : ''}` : x)}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` : '<div class="muted small">No reports yet. Pending: CBC, ferritin, vitamin D, B12, TSH, HbA1c.</div>'}<div class="muted small">Download the PDF from Tata 1mg and upload it in a chat with Claude. Agreed changes to targets and supplements show up here.</div></div>`;
   // profiles
   h += `<div class="card span2"><h2>What each tablet adds</h2><div class="list">${SUPPS.map(s => `<div class="li"><div class="main"><div class="t">${esc(s.name)}${s.est ? ' <span class="chip close">estimated</span>' : ''}</div><div class="s">${Object.entries(s.v).map(([nk, v]) => `${NMAP[nk]?.n || nk} ${fmt(v, NMAP[nk]?.u)} ${NMAP[nk]?.u || ''}`).join(' · ')}</div></div></div>`).join('')}</div></div>`;
   return h + '</div>';

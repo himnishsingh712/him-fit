@@ -187,3 +187,6 @@ Before, Edit → Save pre-filled "Weight today" with the latest *corrected* weig
 
 ## v1.17.3 — B12 daily
 Methylcobalamin 1500 moves from 2 tablets on Sundays to 1 tablet daily with breakfast, from 21 Nov 2026 (supplement schedules can now have a `from` date). Daily until the early-Feb 2027 retest. The "missed 2 days running" flag applies to it like the other daily supplements.
+
+## v1.17.4 — Bloodwork card
+With reports on file but no next date, the chip reads "Next test not booked" instead of "Not done yet". Reports from Oct 2023, Jun 2025 and Apr 2026 were added to `config.bloodwork.reports` on 20 Nov.
