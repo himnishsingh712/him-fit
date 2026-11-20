@@ -153,7 +153,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.16.2';
+const APP_VERSION = '1.17.0';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -299,7 +299,7 @@ function syncHTML() {
 // ================= derived stats =================
 const allKeys = () => Object.keys(S.days).filter(k => /^\d{4}-\d\d-\d\d$/.test(k)).sort();
 const firstKey = () => { const ks = allKeys().filter(k => hasData(S.days[k])); return ks[0] || todayKey(); };
-function hasData(d) { return d && ((d.items || []).length || d.water || Object.values(d.supp || {}).some(Boolean) || Object.keys(d.ci || {}).length); }
+function hasData(d) { return d && ((d.items || []).length || (d.tr || []).length || d.water || Object.values(d.supp || {}).some(Boolean) || Object.keys(d.ci || {}).length); }
 function rangeKeys(end, n) { const a = []; for (let i = n-1; i >= 0; i--) a.push(addDays(end, -i)); return a; }
 function weightAvg(end, n = 7) { const v = rangeKeys(end, n).map(k => S.days[k]?.ci?.w).filter(x => x > 0); return v.length ? mean(v) : null; }
 function targetsHit(k) {
@@ -548,10 +548,7 @@ function viewTraining() {
   // weekly sets per muscle (7 days ending this day)
   const wk = rangeKeys(k, 7).flatMap(kk => S.days[kk]?.tr || []); const ws = weeklySets(wk);
   if (wk.some(e => !e.sport)) h += `<div class="card span2"><h2>Sets this week</h2><div class="muted small">Last 7 days. Muscle grows best with about 10–20 hard sets a week per muscle; a set counts in full for the main muscle and half for helpers.</div>${MUSCLES.map(([m, n]) => { const v = ws[m] || 0; const c = v >= 10 ? 'var(--ok)' : v >= 5 ? 'var(--acc)' : 'var(--muted)'; return `<div class="row small"><span style="width:80px">${n}</span><div class="bar" style="flex:1;height:6px;margin:0 8px"><div style="width:${Math.min(100, v / 20 * 100)}%;background:${c}"></div></div><b style="width:36px;text-align:right">${fq(v)}</b></div>`; }).join('')}</div>`;
-  // progress per lift: first vs latest best set
-  const hist = {}; allKeys().sort().forEach(kk => (S.days[kk]?.tr || []).forEach(e => { if (e.sport) return; const key = e.x + '|' + e.eq; const b = bestSet(e); if (b) (hist[key] = hist[key] || []).push({k: kk, b, e}); }));
-  const prog = Object.entries(hist).filter(([, xs]) => xs.length >= 2);
-  if (prog.length) h += `<div class="card span2"><h2>Progress</h2><div class="muted small">Best set, first time vs latest. Weighted lifts use an estimated 1-rep max.</div>${prog.map(([key, xs]) => { const a = xs[0], z = xs[xs.length - 1]; const v = x => x.b.e1 != null ? `${x.b.e1.toFixed(1)} kg` : `${x.b.reps} reps`; const up = (z.b.e1 ?? z.b.reps) - (a.b.e1 ?? a.b.reps); return `<div class="row small"><span>${esc(trName(z.e))}</span><span>${v(a)} → <b style="color:${up > 0 ? 'var(--ok)' : up < 0 ? 'var(--over)' : 'inherit'}">${v(z)}</b></span></div>`; }).join('')}</div>`;
+  h += `<a href="#trends" class="card span2" style="text-decoration:none;color:inherit"><div class="row"><span class="small"><b>Training history</b> · weekly activity, sets per muscle, lift progress</span><span class="small" style="color:var(--acc);font-weight:600">Trends →</span></div></a>`;
   return h + '</div>';
 }
 function viewTrainAdd() {
@@ -679,6 +676,13 @@ function exportData(kind) {
     ks.forEach(k => (S.days[k].items || []).forEach(it => { const v = itemVec(it); rows.push([k, it.t ? new Date(it.t).toISOString() : '', MEALN[mealOf(it)], FMAP[it.f]?.name || it.f, it.q, JSON.stringify(it.o || {}), Math.round(v.kcal || 0), +(v.p || 0).toFixed(1), +(v.c || 0).toFixed(1), +(v.f || 0).toFixed(1), +(v.fib || 0).toFixed(1), Math.round(v.na || 0)]); }));
     return download(`himfit-food-${stamp}.csv`, toCSV(rows));
   }
+  if (kind === 'training') {
+    const rows = [['date','time','exercise','equipment','set','reps','weight_kg','minutes','kcal']]; const kg = kgNow();
+    ks.forEach(k => trEntries(k).forEach(e => { const tm = new Date(e.t).toISOString(); const kc = Math.round(entryKcal(e, kg));
+      if (e.sport) rows.push([k, tm, SPMAP[e.sport]?.n || e.sport, '', '', '', '', e.min, kc]);
+      else e.sets.forEach((st, i) => rows.push([k, tm, XMAP[e.x]?.n || e.x, EQN[e.eq] || e.eq, i + 1, st.r, st.w || '', '', i === 0 ? kc : ''])); }));
+    return download(`himfit-training-${stamp}.csv`, toCSV(rows));
+  }
   if (kind === 'drinks') {
     const rows = [['date','time','drink','kcal','caffeine_mg','taurine_mg','sugar_g','std_drinks']];
     ks.forEach(k => (S.days[k].ci?.drinks || []).forEach(dr => { const v = drinkVec(dr); rows.push([k, dr.t ? new Date(dr.t).toISOString() : '', drinkLabel(dr), Math.round(v.kcal || 0), Math.round(v.caf || 0), Math.round(v.tau || 0), +(v.sug || 0).toFixed(1), ((v.alc || 0) / 10).toFixed(1)]); }));
@@ -726,6 +730,7 @@ function viewTrends() {
   const kv = keys.map(k => { const d = S.days[k]; if (!d || !(d.items || []).length) return {v: null, l: lab(k)}; const t = dayCalc(d).tot; return {v: t.kcal, l: lab(k), c: (t.p || 0) < T('p') ? 'var(--acc2)' : 'var(--acc)', p: t.p}; });
   const logged = kv.filter(x => x.v != null);
   h += `<div class="card"><div class="row"><h2>Calories &amp; protein</h2><span class="small muted">${logged.length ? `avg ${fmt(mean(logged.map(x => x.v)),'kcal')} kcal · ${fmt(mean(logged.map(x => x.p)),'g')} g` : ''}</span></div>${bars(kv, {line: T('kcal'), min: T('kcal'), label: 'Daily calories against target'})}<div class="muted small">Orange = protein under ${T('p')} g that day (${logged.filter(x => x.p < T('p')).length} of ${logged.length}). Dashed line = calorie target.</div></div>`;
+  h += trainingTrends(keys, lab);
   // substances
   const series = (f, c) => keys.map(k => { const v = f(S.days[k]); return {v: v == null ? null : v, l: lab(k), c}; });
   const hs = series(d => d?.ci?.hits, 'var(--water)'), hv = hs.filter(x => x.v != null).map(x => x.v);
@@ -739,6 +744,37 @@ function viewTrends() {
   const ss = series(d => d?.ci?.sl, 'var(--water)'), sv = ss.filter(x => x.v != null).map(x => x.v);
   h += `<div class="card"><div class="row"><h2>Sleep</h2><span class="big">${sv.length ? mean(sv).toFixed(1) + ' h' : '—'} ${sv.length && mean(sv) < 7 ? '<span class="chip close">LOW</span>' : ''}</span></div>${sv.length ? bars(ss, {line: 7, min: 9, label: 'Hours slept'}) : '<div class="muted small">Nothing logged.</div>'}<div class="muted small">${sv.length} nights logged · target 7–8 h</div></div>`;
   return h + '</div>';
+}
+// training on Trends: activity over the range, sets per muscle by week, and each lift's progress
+function trainingTrends(keys, lab) {
+  const kg = kgNow(); let h = '';
+  const tv = keys.map(k => { const es = S.days[k]?.tr || []; const kc = dayTrainKcal(es, kg); return {v: es.length ? Math.round(kc) : null, l: lab(k), c: es.some(e => e.sport && e.sport !== 'mobility') ? 'var(--water)' : 'var(--acc)'}; });
+  const act = tv.filter(x => x.v != null), totK = sum(act.map(x => x.v));
+  const setsN = sum(keys.flatMap(k => (S.days[k]?.tr || []).filter(e => !e.sport).map(e => e.sets.length)));
+  const mins = sum(keys.flatMap(k => (S.days[k]?.tr || []).map(e => e.sport ? e.min || 0 : e.sets.length * 2.5)));
+  h += `<div class="card"><div class="row"><h2>Training</h2><span class="big">${act.length} <small>active days</small></span></div>
+    <div class="small muted">${fmt(totK,'kcal')} kcal burned · ${setsN} sets · ${Math.round(mins)} min</div>
+    ${act.length ? bars(tv, {label: 'Training calories per day'}) + '<div class="muted small">Calories from training each day. Blue = a day with sport.</div>' : '<div class="muted small">Nothing logged in this period.</div>'}</div>`;
+  // sets per muscle, last 8 weeks
+  const wsNow = weekStart(todayKey()); const weeks = Array.from({length: 8}, (_, i) => addDays(wsNow, -7 * (7 - i)));
+  const grid = weeks.map(ws => weeklySets(Array.from({length: 7}, (_, j) => S.days[addDays(ws, j)]?.tr || []).flat()));
+  if (grid.some(g => Object.keys(g).length)) {
+    const cell = v => { const c = !v ? 'rgba(255,255,255,.04)' : v < 5 ? 'rgba(255,184,0,.18)' : v < 10 ? 'rgba(255,184,0,.38)' : v <= 20 ? 'rgba(122,201,122,.55)' : 'rgba(122,201,122,.85)'; return `<td style="background:${c};text-align:center;border-radius:6px;padding:4px 0;font-size:12px">${v ? fq(v) : ''}</td>`; };
+    const tot = MUSCLES.map(([m, n]) => [n, sum(grid.slice(-4).map(g => g[m] || 0))]).sort((a, b) => b[1] - a[1]);
+    h += `<div class="card"><h2>Sets per muscle, by week</h2><div class="muted small">Last 8 weeks (Mon–Sun). Green = 10–20 sets, the range that builds muscle best.</div>
+      <table style="width:100%;border-spacing:3px;margin-top:6px"><tr><td></td>${weeks.map(ws => `<td class="small muted" style="text-align:center">${parseKey(ws).getDate()}/${parseKey(ws).getMonth() + 1}</td>`).join('')}</tr>
+      ${MUSCLES.map(([m, n]) => `<tr><td class="small" style="white-space:nowrap;padding-right:4px">${n}</td>${grid.map(g => cell(g[m] || 0)).join('')}</tr>`).join('')}</table>
+      <div class="small" style="margin-top:6px">Last 4 weeks: most <b>${tot[0][0].toLowerCase()}</b> (${fq(tot[0][1])} sets), least <b>${tot[tot.length - 1][0].toLowerCase()}</b> (${fq(tot[tot.length - 1][1])}).</div></div>`;
+  }
+  // lift progress lines
+  const hist = {}; allKeys().sort().forEach(kk => (S.days[kk]?.tr || []).forEach(e => { if (e.sport) return; const b = bestSet(e); if (!b) return; const key = e.x + '|' + e.eq; (hist[key] = hist[key] || []).push({k: kk, v: b.e1 ?? b.reps, unit: b.e1 != null ? 'kg' : 'reps', e}); }));
+  const prog = Object.values(hist).filter(xs => xs.length >= 2);
+  if (prog.length) h += `<div class="card"><h2>Lift progress</h2><div class="muted small">Best set each time you did it. Weighted lifts show an estimated 1-rep max.</div>${prog.map(xs => {
+      const W = 120, H = 28, mn = Math.min(...xs.map(x => x.v)), mx = Math.max(...xs.map(x => x.v)), sp = mx - mn || 1;
+      const pts = xs.map((x, i) => `${(i / (xs.length - 1) * W).toFixed(1)},${(H - 3 - (x.v - mn) / sp * (H - 6)).toFixed(1)}`).join(' ');
+      const a = xs[0], z = xs[xs.length - 1], up = z.v - a.v, f = x => x.unit === 'kg' ? x.v.toFixed(1) + ' kg' : x.v + ' reps';
+      return `<div class="row small" style="gap:8px"><span style="flex:1;min-width:0">${esc(trName(z.e))}</span><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><polyline points="${pts}" fill="none" stroke="${up >= 0 ? 'var(--ok)' : 'var(--over)'}" stroke-width="2" stroke-linejoin="round"/></svg><span style="width:110px;text-align:right">${f(a)} → <b>${f(z)}</b></span></div>`; }).join('')}</div>`;
+  return h;
 }
 function viewSupps() {
   const k = S.date, d = day(k), cfg = CFG();
@@ -1105,7 +1141,7 @@ function sheetHTML() {
       <div><div class="muted small">Signed in as</div><div style="font-weight:600">${esc(S.user?.email)}</div></div>
       <div class="row"><span class="status" style="font-size:13px">${syncHTML()}</span><button class="btn" data-act="syncnow">Sync now</button></div>
       <div class="muted small">${Object.keys(dirty).length} day(s) waiting to sync. Everything is saved on this phone first.</div>
-      <div style="font-weight:600">Export your data</div><div class="btns c2"><button class="btn" data-act="export" data-id="days">Days (CSV)</button><button class="btn" data-act="export" data-id="food">Food (CSV)</button><button class="btn" data-act="export" data-id="drinks">Drinks (CSV)</button><button class="btn" data-act="export" data-id="json">Full backup (JSON)</button></div>
+      <div style="font-weight:600">Export your data</div><div class="btns c2"><button class="btn" data-act="export" data-id="days">Days (CSV)</button><button class="btn" data-act="export" data-id="food">Food (CSV)</button><button class="btn" data-act="export" data-id="drinks">Drinks (CSV)</button><button class="btn" data-act="export" data-id="training">Training (CSV)</button><button class="btn" data-act="export" data-id="json">Full backup (JSON)</button></div>
       <button class="btn danger" data-act="signout">Sign out</button><div class="muted small">HimFit v${APP_VERSION}</div></div></div>`;
   }
   return '';

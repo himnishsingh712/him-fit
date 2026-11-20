@@ -120,6 +120,7 @@ const go = async h => { w.location.hash = h; await wait(40); };
   await go('#training'); ok('training tab lists entries with calories', $$('[data-act=tredit]').length === 4 && doc.body.textContent.includes('added to your target'));
   ok('sets this week shown', doc.body.textContent.includes('Sets this week'));
   await go('#nutrients'); ok('nutrients shows target with training', doc.body.textContent.includes('training today'));
+  await go('#trends'); { const hs = $$('h2').map(e => e.textContent); ok('trends has training, sets per muscle', hs.includes('Training') && hs.includes('Sets per muscle, by week'), hs.join()); }
   await go('#training'); click('[data-act=tredit]'); await wait(10); click('[data-act=trdel]'); await wait(30); ok('remove an entry', $$('[data-act=tredit]').length === 3);
   await go('#me');
   click('[data-act=tapeopen]'); await wait(20);
