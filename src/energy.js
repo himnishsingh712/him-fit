@@ -183,7 +183,7 @@ export function energyAt(inp, t) {
     racket: ['Racket sport', m => 5 * hump(m, -1, 15, 60) - 3 * hump(m, 90, 150, 240)],
     chill: ['Chill', m => 3 * hump(m, -1, 30, 180)],
   };
-  (inp.events || []).forEach(ev => { const f = TT[ev.k]; if (!f) return; const mm = (t - ev.t) / MIN; if (mm < 0 || mm > 300) return; add('tags', 'tt_' + ev.k, f[0], f[1](mm)); });
+  (inp.events || []).forEach(ev => { const f = TT[ev.k]; if (!f) return; const mm = (t - ev.t) / MIN; if (mm < 0 || mm > 300) return; add('tags', 'tt_' + ev.k, f[0] + (ev.sc && ev.sc !== 1 ? ` (${ev.sc < 1 ? 'short' : 'long'} session)` : ''), f[1](mm) * (ev.sc ?? 1)); });
   const SPORT = ['gym', 'football', 'racket'], ye = inp.yEvents || [], fadeM = clamp(1 - a / 6, 0, 1);
   if (ye.some(x => x.k === 'football')) add('tags', 'yfootball', "Yesterday's football", -3 * fadeM);
   if (ye.some(x => SPORT.includes(x.k) && x.t <= inp.bed && inp.bed - x.t < 2 * H)) add('tags', 'latesport', 'Hard exercise close to bedtime', -3 * fadeM);
