@@ -144,7 +144,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.15.0';
+const APP_VERSION = '1.16.0';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -398,14 +398,30 @@ function respreadHits(k, mode) { const ci = day(k).ci; if (!ci?.hitsTap?.length)
 function hitsChainLine(k) { const ch = S.days[k]?.ci?.hitsChain; if (!ch) return ''; return `<div class="flag info"><div>${ch.n} hits spread over ${tlabel(ch.start)}–${tlabel(ch.end)}. <span class="small">Change: <a href="#" data-act="hitmode" data-id="1h">last hour</a> · <a href="#" data-act="hitmode" data-id="3h">last 2–3 h</a> · <a href="#" data-act="hitmode" data-id="wake">since I woke</a></span></div></div>`; }
 const napHours = ci => sum((ci?.naps || []).map(n => Math.max(0, n.e - n.s))) / 3600e3;
 const fmtH = h => { const m = Math.round(h * 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ' ' + (m % 60) + ' min' : ''}`; };
-function napCard(k) {
-  const ci = S.days[k]?.ci || {}; const naps = (ci.naps || []).slice().sort((a, b) => a.s - b.s);
-  const nowT = hhmm(Date.now()); const def = S.napDraft || {s: hhmm(Date.now() - 3600e3), e: nowT};
-  return `<div class="card"><div class="row"><div><h2>Naps &amp; daytime sleep</h2><div class="muted small">${naps.length ? `${fmtH(napHours(ci))} today · counts toward your sleep and energy` : 'Any sleep outside the night. Adds to the day and your energy score.'}</div></div></div>
-    ${naps.length ? `<div class="list">${naps.map(n => `<div class="li"><div class="main"><div class="t">${tlabel(n.s)} – ${tlabel(n.e)}</div><div class="s">${fmtH((n.e - n.s) / 3600e3)}</div></div><button class="iconbtn" data-act="delnap" data-id="${n.id}" aria-label="Remove nap">${ic('x',18)}</button></div>`).join('')}</div>` : ''}
-    <div class="g2"><label class="fl">Fell asleep<input class="field" type="time" value="${def.s}" data-nap="s"></label><label class="fl">Woke up<input class="field" type="time" value="${def.e}" data-nap="e"></label></div>
-    <button class="btn" data-act="addnap">+ Add nap</button></div>`;
+// one Sleep card: night sleep and naps together; + Add sleep classifies by time (same rule as the sleep button)
+function nightOf(k) { const ci = S.days[k]?.ci || {}; const mc = ci.mc && !ci.mc.skipped ? ci.mc : null;
+  if (mc?.bed && mc?.wake) return {s: bedMs(k, mc.bed), e: atClock(k, mc.wake, false)}; if (ci.slp) return {s: ci.slp.s, e: ci.slp.e}; return null; }
+function sleepCard(k) {
+  const ci = S.days[k]?.ci || {}; const nt = nightOf(k); const naps = (ci.naps || []).slice().sort((a, b) => a.s - b.s);
+  const row = (kind, id, s0, e0) => `<button class="li linkish" style="width:100%" data-act="sleepedit" data-id="${id}" data-kind="${kind}"><div class="main"><div class="t" style="font-weight:600">${kind === 'night' ? 'Night' : 'Nap'}</div><div class="s">${tlabel(s0)} → ${tlabel(e0)}</div></div><b>${fmtH((e0 - s0) / 3600e3)}</b></button>`;
+  const tot = (nt ? (nt.e - nt.s) / 3600e3 : 0) + napHours(ci);
+  return `<div class="card"><div class="row"><h2>Sleep</h2><span class="small muted">${tot ? fmtH(tot) + ' total' : ''}</span></div>
+    ${nt || naps.length ? `<div class="list">${nt ? row('night', 'night', nt.s, nt.e) : ''}${naps.map(n => row('nap', n.id, n.s, n.e)).join('')}</div>` : '<div class="muted small">Nothing yet. Use 🌙 Sleep on Today, or add it here if you forgot.</div>'}
+    <button class="btn" data-act="sleepnew">+ Add sleep</button>
+    <div class="muted small">Starts between 8 PM and 8 AM, or 5 h or longer = night sleep; anything else = a nap. Tap an entry to change or remove it.</div></div>`;
 }
+function saveSleep(k, from, to, editKind, editId) {
+  const d = day(k); d.ci = d.ci || {};
+  const fh = +from.split(':')[0]; const nS = bedMs(k, from), nE = atClock(k, to, false); const nightLike = (fh >= 20 || fh < 8 || nE - nS >= 5 * 3600e3) && nE > nS && nE - nS < 16 * 3600e3;
+  // remove the entry being edited first
+  if (editKind === 'nap') d.ci.naps = (d.ci.naps || []).filter(n => n.id !== editId);
+  if (editKind === 'night') clearNight(d);
+  if (nightLike) { const mc = d.ci.mc && !d.ci.mc.skipped ? d.ci.mc : null; if (mc) { mc.bed = from; mc.wake = to; } else d.ci.slp = {s: nS, e: nE};
+    d.ci.sl = Math.round((nE - nS) / 3600e3 * 4) / 4; touch(k); toast(`✓ Night sleep saved · ${fmtH((nE - nS) / 3600e3)}`); return true; }
+  let st = atClock(k, from), en = atClock(k, to); if (en <= st) en += 864e5; if (en - st > 10 * 3600e3) { toast('That nap is over 10 h — check the times'); return false; }
+  d.ci.naps = d.ci.naps || []; d.ci.naps.push({id: uid(), s: st, e: en}); touch(k); toast(`✓ Nap saved · ${fmtH((en - st) / 3600e3)}`); return true;
+}
+function clearNight(d) { const mc = d.ci?.mc; if (mc && !mc.skipped) { delete mc.bed; delete mc.wake; } if (d.ci) { delete d.ci.slp; delete d.ci.sl; } }
 const median = a => { const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length/2); return s.length % 2 ? s[m] : (s[m-1]+s[m])/2; };
 const INSIGHTS = [
   {x:'Drinks (std)', y:'sleep', fx: d => Array.isArray(d?.ci?.drinks) ? stdDrinks(d) : undefined, fy: (d, n) => n?.ci?.sl, lag:1, yu:'h', verb:'you slept', after:'the next night', yd:1, bin:true},
@@ -599,8 +615,7 @@ function viewCheckin() {
   h += `<div class="grid">`;
   h += `<div class="card"><div class="row"><label for="w"><h2>Weight</h2><div class="muted small">${ci.w && ci.wt ? (() => { const ha = weightHoursAwake(k); const pc = weightCorrPct(ha); return pc ? `Weighed ${ha.toFixed(0)} h after waking: counts as <b>${weightCorr(k).toFixed(1)} kg</b> (−${(pc * 100).toFixed(1)}%)` : 'Weighed soon after waking: counts as is'; })() : 'Any time; corrected to a morning number by hours since waking'}</div></label><span style="display:flex;align-items:center;gap:6px"><input id="w" class="num" type="number" inputmode="decimal" step="0.1" min="30" max="200" value="${ci.w ?? ''}" placeholder="—" data-act="ci" data-f="w"><span class="muted">kg</span></span></div>${lastWeightNote(k)}</div>`;
 
-  { const mc = ci.mc && !ci.mc.skipped ? ci.mc : null; const p = PROF() || {}; h += `<div class="card"><div class="row"><div><h2>Sleep last night</h2><div class="muted small">${ci.sl != null ? `<b>${ci.sl} h</b> · worked out from your times${napHours(ci) ? ` · <b>${(ci.sl + napHours(ci)).toFixed(1)} h</b> with naps` : ''}` : 'Set the times; hours are worked out for you'}</div></div></div><div class="g2"><label class="fl">Went to sleep<input class="field" type="time" value="${mc?.bed || p.bed || '01:00'}" data-act="sleeptime" data-f="bed"></label><label class="fl">Woke up<input class="field" type="time" value="${mc?.wake || p.wake || '09:00'}" data-act="sleeptime" data-f="wake"></label></div></div>`; }
-  h += napCard(k);
+  h += sleepCard(k);
   h += dayTagsCard(ci);
   h += `<div class="card"><div class="row"><div><h2>Bong hits</h2><div class="muted small">${hitsNote(k)}</div></div>${stepper('cistep', 'hits', ci.hits ?? '—')}</div>${hitsChainLine(k)}<div class="muted small">Tap + when you take them. 5+ taps in a row count as catching up: spread back at ~6 an hour (12 hits = last 2 h). Change it if they were spread out more.</div></div>`;
   h += `<div class="card"><div class="row"><h2>Cigarettes</h2>${stepper('cistep', 'cigs', ci.cigs ?? '—')}</div></div>`;
@@ -1033,6 +1048,9 @@ function viewMe() {
 function sheetHTML() {
   const sh = S.sheet; if (!sh) return '';
   if (sh.type === 'tr') return trSheetHTML(sh);
+  if (sh.type === 'sleep') return `<div class="sheetbg" data-act="closesheet"><div class="sheet" role="dialog" aria-label="Sleep" data-stop="1"><div class="row"><h3>${sh.kind ? (sh.kind === 'night' ? 'Night sleep' : 'Nap') : 'Add sleep'}</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div>
+    <div class="g2"><label class="fl">Fell asleep<input class="field" type="time" value="${sh.from}" data-act="slf" data-f="from"></label><label class="fl">Woke up<input class="field" type="time" value="${sh.to}" data-act="slf" data-f="to"></label></div>
+    <button class="btn primary" data-act="sleepsave">Save</button>${sh.kind ? `<button class="btn" data-act="sleepdel">Remove</button>` : ''}</div></div>`;
   if (sh.type === 'ev') return `<div class="sheetbg" data-act="closesheet"><div class="sheet" role="dialog" aria-label="Log" data-stop="1"><div class="row"><h3>${EVN[sh.k] || TIMED[sh.k]}</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div><div class="row"><span>Time</span><input class="field" style="width:150px" type="time" value="${sh.time}" data-act="evsheettime" aria-label="Time"></div><button class="btn primary" data-act="evok">OK</button></div></div>`;
   if (sh.type === 'hist') { const cfg = CFG(); return `<div class="sheetbg" data-act="closesheet"><div class="sheet tall" role="dialog" aria-label="Target history" data-stop="1"><div class="row"><h3>Target history</h3><button class="iconbtn" data-act="closesheet" aria-label="Close">${ic('x',18)}</button></div><div class="muted small">Every change to your daily targets, with the reason. Written automatically.</div>${(cfg.changes || []).slice().sort((a, b) => a.date < b.date ? 1 : -1).map(c => `<div class="row small" style="justify-content:flex-start;align-items:flex-start"><span class="muted" style="width:64px;flex:none">${shortDate(c.date)}</span><span>${esc(c.text)}</span></div>`).join('') || '<div class="muted small">No changes yet.</div>'}</div></div>`; }
   if (sh.type === 'item') {
@@ -1244,6 +1262,10 @@ document.addEventListener('click', e => {
     case 'suppall': d.supp = d.supp || {}; dueList(k).forEach(x => d.supp[x.id] = true); touch(k); toast('All supplements ticked'); break;
     case 'repeatmeal': { const yk = addDays(k, -1); const its = (S.days[yk]?.items || []).filter(it => mealOf(it) === id); const t = logTimeFor(k, id); S.logTime = null; its.forEach(it => d.items.push({id: uid(), f: it.f, q: it.q, o: {...(it.o || {})}, t, m: id})); touch(k); toast(`Added yesterday's ${MEALN[id].toLowerCase()}`); location.hash = '#meals'; break; }
     case 'export': exportData(id); break;
+    case 'sleepnew': S.sheet = {type: 'sleep', from: hhmm(Date.now() - 3600e3), to: hhmm(Date.now())}; render(); break;
+    case 'sleepedit': { const kind = el.dataset.kind; let sx; if (kind === 'night') sx = nightOf(k); else sx = (d.ci?.naps || []).find(n => n.id === id); if (sx) { S.sheet = {type: 'sleep', kind, id, from: hhmm(sx.s), to: hhmm(sx.e)}; render(); } break; }
+    case 'sleepsave': { const sh = S.sheet; if (saveSleep(k, sh.from, sh.to, sh.kind, sh.id)) { S.sheet = null; render(); } break; }
+    case 'sleepdel': { const sh = S.sheet; if (sh.kind === 'night') clearNight(d); else d.ci.naps = (d.ci.naps || []).filter(n => n.id !== sh.id); S.sheet = null; touch(k); toast('Removed'); break; }
     case 'addnap': { const dr = S.napDraft || {s: hhmm(Date.now() - 3600e3), e: hhmm(Date.now())}; let st = atClock(k, dr.s), en = atClock(k, dr.e); if (en <= st) en += 864e5; if (en - st > 10 * 3600e3) { toast('That nap is over 10 h — check the times'); break; } d.ci = d.ci || {}; d.ci.naps = d.ci.naps || []; d.ci.naps.push({id: uid(), s: st, e: en}); S.napDraft = null; touch(k); toast(`Nap added · ${fmtH((en - st) / 3600e3)}`); break; }
     case 'delnap': d.ci.naps = (d.ci.naps || []).filter(n => n.id !== id); touch(k); break;
     case 'tapeopen': { const vals = {}; tapeFields().forEach(([f]) => { const sr = tapeSeries(f); if (sr.length) vals[f] = toIn(sr[sr.length-1].v); }); S.sheet = {type: 'tape', date: todayKey(), vals, orig: {...vals}}; render(); break; }
@@ -1278,6 +1300,7 @@ document.addEventListener('change', e => {
   if (act === 'supp') { d.supp = d.supp || {}; d.supp[el.dataset.id] = el.checked; touch(k); }
   if (act === 'ci') { d.ci = d.ci || {}; const f = el.dataset.f; const v = el.value === '' ? null : +el.value; if (v == null || isNaN(v)) { delete d.ci[f]; if (f === 'w') delete d.ci.wt; } else { d.ci[f] = v; if (f === 'w') d.ci.wt = k === todayKey() ? Date.now() : atClock(k, (PROF()?.wake || '09:00'), false); } touch(k); if (f === 'w' && v != null && !isNaN(v)) { toast(`✓ Weight saved · ${v} kg`); okMark('[data-act=ci][data-f=w]'); } }
   if (act === 'tapein') { d.ci = d.ci || {}; const f = el.dataset.f; const v = el.value === '' ? null : +el.value; if (v == null || isNaN(v)) delete d.ci[f]; else d.ci[f] = Math.round(v * IN * 10) / 10; touch(k); }
+  if (act === 'slf') { if (el.value && S.sheet) S.sheet[el.dataset.f] = el.value; }
   if (act === 'sleeptime') { d.ci = d.ci || {}; const mc = d.ci.mc && !d.ci.mc.skipped ? d.ci.mc : (d.ci.mc = {bed: PROF()?.bed || '01:00', wake: PROF()?.wake || '09:00', t: Date.now()}); mc[el.dataset.f] = el.value; const sl = Math.round((atClock(k, mc.wake, false) - bedMs(k, mc.bed)) / 3600e3 * 4) / 4; if (sl > 0 && sl < 16) d.ci.sl = sl; touch(k); toast(`✓ Sleep saved${sl > 0 && sl < 16 ? ' · ' + fmtH(sl) : ''}`); okMark(`[data-act=sleeptime][data-f=${el.dataset.f}]`); }
   if (act === 'cartset') { const id = el.dataset.id, base = +el.dataset.base || 0; const c = S.cart[id] || (S.cart[id] = {q: 0, o: {...sauceDefaults(FMAP[id])}}); c.q = Math.max(-base, roundStep(el.value, stepOf(id)) - base); if (FMAP[id].param && !c.o[FMAP[id].param.key]) c.o[FMAP[id].param.key] = FMAP[id].param.def; if (id === 'dosa' && c.q) S.dosaMode = 'n'; render(); }
   if (act === 'itemqset') { const it = (d.items || []).find(x => x.id === el.dataset.id); if (it) { it.q = Math.max(stepOf(it.f), roundStep(el.value, stepOf(it.f)) || it.q); touch(k); toast(`✓ Updated · ${fq(it.q)}`); okMark(`[data-act=itemqset][data-id="${it.id}"]`); } }

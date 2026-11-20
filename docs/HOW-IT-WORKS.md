@@ -170,3 +170,6 @@ Every dated screen: "‹ date ›" on the top-left (arrows next to the date they
 - Push-ups/squats: each tap is one bodyweight set in Training at that time; taps within 30 min stack as sets in one entry. Lifting sessions now scale from 0.15× (a single set is a tiny nudge).
 - Mobility (stretches, foam rolling, yoga, Surya Namaskar): a 10-min "Mobility & stretching" entry (net MET 1.5, ~17 kcal); energy +3 for about an hour, then −1 for about an hour. Also in the exercise list under "Sports & mobility" with durations from 10 min.
 - 🌙 Sleep moved next to Check-in on Today; it becomes ☀️ I'm awake while you're asleep ("Sleeping since … · Undo" under the quick row).
+
+## v1.16.0 — One Sleep card
+Check-in's "Sleep last night" and "Naps" cards are one **Sleep** card: night sleep and naps listed together (from the 🌙 button or added by hand). **+ Add sleep** asks fell asleep / woke up and classifies like the sleep button: starting 8 PM–8 AM or lasting 5 h+ = night sleep (saved to the morning answers if they exist, else as `ci.slp`, and sets the day's sleep hours); anything else = a nap. Tap an entry to change its times or remove it.
