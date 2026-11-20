@@ -160,3 +160,7 @@ button.li.linkish{padding:8px 0;align-items:center;gap:10px}
 .pillsm{display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap;padding:0 14px;min-height:34px;font-size:14px}
 .top{padding-top:2px}
 .top a.pill.pillsm{min-height:34px;height:34px;padding:0 14px;font-size:14px;align-self:center}
+.top .pill.ghost2{background:var(--tile);color:inherit;border:1px solid var(--border)}
+.top .pill.on2{background:#3A2A12;color:var(--acc);border:2px solid var(--acc)}
+.qadd .btn{white-space:nowrap;font-size:13px;padding:0 4px}
+.grid .qadd button.btn{font-size:13px;padding:0 4px;white-space:nowrap;letter-spacing:-0.2px}

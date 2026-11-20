@@ -57,7 +57,10 @@ const go = async h => { w.location.hash = h; await wait(40); };
     click('.mealsec [data-act=edititem]'); await wait(10); click('[data-act=delitem]'); await wait(30);
     ok('remove from the Meals page', $$('.mealsec [data-act=edititem]').length === 1); }
   await go('#today'); ok('Today has no meals list', !$('.mealsec') && !!$('.qadd'));
-  ok('quick-add has Going to sleep, not Repeat last meal', !!$('[data-act=sleepstart]') && !$('[data-act=qrepeat]'));
+  ok('sleep button sits in the header; quick row is hit / push-ups / squats / mobility', !!$('.top [data-act=sleepstart]') && $$('.qadd button').length === 4 && !!$('.qadd [data-act=qmob]') && !$('.qadd [data-act=water]'));
+  click('[data-act=qtr][data-id=pushup]'); await wait(20); click('[data-act=qtr][data-id=pushup]'); await wait(20);
+  ok('push-up taps stack as sets in one entry', doc.body.textContent.includes('20 today'));
+  click('[data-act=qmob]'); await wait(20); ok('mobility logs', doc.body.textContent.includes('Mobility logged'));
   click('[data-act=sleepstart]'); await wait(30);
   ok('sleep button flips to I\'m awake with undo', !!$('[data-act=sleepend]') && doc.body.textContent.includes('Sleeping since'));
   click('[data-act=sleepundo]'); await wait(30); ok('undo restores', !!$('[data-act=sleepstart]'));
@@ -66,8 +69,7 @@ const go = async h => { w.location.hash = h; await wait(40); };
   for (let i = 0; i < 6; i++) { click('[data-act=qhit]'); await wait(5); }
   ok('catch-up hits get spread', txt('.flag.info').includes('6 hits spread over'), txt('.flag.info'));
   if ($('.qadd [data-act=suppall]')) { click('.qadd [data-act=suppall]'); await wait(20); }
-  ok('quick-add shows supps done', !!$('.qadd [data-act=suppundo]'));
-  ok('took all ticks supplements', $$('input[data-act=supp]').every(c => c.checked));
+  ok('supplements no longer on the quick row', !$('.qadd [data-act=suppall]') && !$('.qadd [data-act=suppundo]'));
   await go('#checkin');
   ok('no sleep-hours stepper', !$('[data-act=cistep][data-id=sl]'));
   ok('sleep shows times', $$('[data-act=sleeptime]').length === 2);
@@ -105,16 +107,16 @@ const go = async h => { w.location.hash = h; await wait(40); };
   await go('#me'); ok('Me shows base target', doc.body.textContent.includes('kcal today'));
   // training
   ok('nav has Training, Me moved off the bar', !!$('nav a[href="#training"]') && !$('nav a[href="#me"]'));
-  await go('#trainadd'); ok('exercise list grouped, 27 exercises + 3 sports', $$('[data-act=tradd]').length === 30);
+  await go('#trainadd'); ok('exercise list grouped, 27 exercises + 3 sports + mobility', $$('[data-act=tradd]').length === 31);
   click('[data-act=tradd][data-id=flatbench]'); await wait(10); ok('exercise sheet asks equipment, sets, reps, weight', $$('[data-act=trset][data-f=eq]').length === 2 && !!$('[data-act=trnum][data-f=w]'));
   click('[data-act=trset][data-f=eq][data-v=db]'); await wait(5); setv('[data-act=trnum][data-f=w]', '20'); await wait(5); click('[data-act=trsave]'); await wait(30);
   ok('added with confirmation', doc.body.textContent.includes('Added · Flat bench press (dumbbell) · 3 × 10 @ 20 kg'));
   click('[data-act=tradd][data-id=flatbench]'); await wait(10); ok('remembers last weight', $('[data-act=trnum][data-f=w]').value === '20'); click('[data-act=closesheet]'); await wait(5);
   click('[data-act=tradd][data-id=football]'); await wait(10); click('[data-act=trset][data-f=min][data-v="60"]'); await wait(5); click('[data-act=trsave]'); await wait(30);
-  await go('#training'); ok('training tab lists entries with calories', $$('[data-act=tredit]').length === 2 && doc.body.textContent.includes('added to your target'));
+  await go('#training'); ok('training tab lists entries with calories', $$('[data-act=tredit]').length === 4 && doc.body.textContent.includes('added to your target'));
   ok('sets this week shown', doc.body.textContent.includes('Sets this week'));
   await go('#nutrients'); ok('nutrients shows target with training', doc.body.textContent.includes('training today'));
-  await go('#training'); click('[data-act=tredit]'); await wait(10); click('[data-act=trdel]'); await wait(30); ok('remove an entry', $$('[data-act=tredit]').length === 1);
+  await go('#training'); click('[data-act=tredit]'); await wait(10); click('[data-act=trdel]'); await wait(30); ok('remove an entry', $$('[data-act=tredit]').length === 3);
   await go('#me');
   click('[data-act=tapeopen]'); await wait(20);
   ok('measurements sheet with date and six spots', !!$('[data-tapedate]') && ['waist','neck','chest','arm','thigh','calf'].every(f => $(`[data-tape=${f}]`)));
