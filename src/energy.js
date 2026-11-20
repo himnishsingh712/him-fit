@@ -19,7 +19,17 @@
 
 const H = 3600e3, MIN = 60e3;
 // v2 from 19 Nov 2026, frozen until 16 Dec 2026. All raw logs are kept, so v1 and v2 can both be re-run over the same days and scored against your ratings.
-export const MODEL_VERSION = 'v2';
+export const MODEL_VERSION = 'v2.1';
+// last-night carry-over: your morning answers partly describe these
+const CARRY = ['debt', 'late', 'jetlag', 'morningfog', 'heavyday', 'hang', 'yparty', 'ysick', 'yfootball', 'latesport', 'latemeal', 'latecaf', 'sleepstreak'];
+// groups that describe the same thing: [keys, weight of 2nd biggest, weight of the rest]
+const OVERLAP = [
+  [CARRY, 0.6, 0.4],                                              // rough night / rough morning
+  [['fast', 'adeq', 'prot'], 0.5, 0.5],                            // hunger, under-eating, low protein
+  [['couch', 'fog'], 0.5, 0.5],                                    // high and foggy
+  [['tt_crashed', 'tt_productive', 'tt_gym', 'tt_football', 'tt_racket', 'spicy', 'hot', 'stressed'], 0.5, 0.3], // tired / drained right now
+  [['dip', 'coma'], 0.6, 0.6],                                     // afternoon dip and food coma land together
+];
 // where each of your 1–5 ratings sits on the 0–100 scale (middle of each band)
 export const RATE_SCORE = [0, 20, 42, 57, 72, 88];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -72,9 +82,10 @@ export function energyAt(inp, t) {
   if (done.length) { const ln = done[done.length-1]; const nh = (ln.e - ln.s) / H, r = Math.min(0.8, nh / 2); aEff = (t - ln.e) / H + Math.max(0, (ln.s - inp.wake) / H) * (1 - r); }
   const awakeH = Math.max(0, a - napBefore); // hours actually awake, for 'expected by now' targets
   // ---- 1 sleep foundation
-  let s1 = interp(SLEEP_PTS, sleepH); if (s1 < 0) s1 *= Math.min(1.5, 1 + 0.04 * aEff); // short sleep bites harder as the day goes on
+  const need = inp.sleepNeed || 7; // your sleep need (v2.1: 7 h, moving halfway toward your own average)
+  let s1 = interp(SLEEP_PTS, sleepH + (7.5 - need)); if (s1 < 0) s1 *= Math.min(1.5, 1 + 0.04 * aEff); // short sleep bites harder as the day goes on
   add('sleep', 'dur', `${sleepH.toFixed(1)} h sleep`, s1);
-  const w = [0.5, 0.3, 0.2]; let debt = 0; (inp.priorSleep || []).forEach((h, i) => { if (h != null) debt += w[i] * Math.max(0, 7.5 - h); });
+  const w = [0.5, 0.3, 0.2]; let debt = 0; (inp.priorSleep || []).forEach((h, i) => { if (h != null) debt += w[i] * Math.max(0, need - h); });
   let s2 = -Math.min(12, 6 * debt); if (sleepH >= 8.5) s2 *= 0.5; add('sleep', 'debt', 'Sleep debt from earlier nights', s2);
   const mid = (inp.bed + inp.wake) / 2; const midMin = (new Date(mid).getHours() * 60 + new Date(mid).getMinutes());
   let uMid = (inp.usualBedMin + ((inp.usualWakeMin - inp.usualBedMin + 1440) % 1440) / 2) % 1440;
@@ -176,19 +187,27 @@ export function energyAt(inp, t) {
   const SPORT = ['gym', 'football', 'racket'], ye = inp.yEvents || [], fadeM = clamp(1 - a / 6, 0, 1);
   if (ye.some(x => x.k === 'football')) add('tags', 'yfootball', "Yesterday's football", -3 * fadeM);
   if (ye.some(x => SPORT.includes(x.k) && x.t <= inp.bed && inp.bed - x.t < 2 * H)) add('tags', 'latesport', 'Hard exercise close to bedtime', -3 * fadeM);
-  { const ts = R.filter(x => x.layer === 'tags').reduce((s, x) => s + x.v, 0); if (Math.abs(ts) > 15) add('tags', 'tagcap', 'Day tags capped at ±15', Math.sign(ts) * 15 - ts); }
+
   // ---- 11 moments
   (inp.events || []).forEach(ev => { const mm = (t - ev.t) / MIN; if (mm < 0 || mm > 180) return;
     if (ev.k === 'cool') add('moments', 'cool', 'Cool shower', 7 * hump(mm, 0, 5, 75));
     if (ev.k === 'hot') add('moments', 'hot', 'Hot shower (fresh, then relaxed)', 3 * hump(mm, 0, 5, 25) - 4 * hump(mm, 20, 50, 110));
     if (ev.k === 'spicy') add('moments', 'spicy', '🌶️ (lift, then relaxed)', 3 * hump(mm, 0, 5, 25) - 7 * hump(mm, 15, 45, 120)); });
   // ---- 12 patterns
-  const pt = inp.pattern || {}; const half = inp.report ? 0.5 : 1; // your sleep-quality answer already carries part of this
+  const pt = inp.pattern || {}; const half = 1; // overlap with your morning answers is handled once, below
   if (pt.lateMealH != null && pt.lateMealH < 2) add('pattern', 'latemeal', `Ate ${pt.lateMealH < 1 ? 'under 1 h' : 'under 2 h'} before bed last night`, -(pt.lateMealH < 1 ? 5 : 3) * half * clamp(1 - a / 6, 0, 1));
   if (pt.bedCaf > 40) add('pattern', 'latecaf', `Caffeine still in you at bedtime (~${Math.round(pt.bedCaf)} mg)`, -Math.min(6, pt.bedCaf / 20) * half * clamp(1 - a / 8, 0, 1));
   if (pt.weekShort > 0.5) add('pattern', 'week', `Short sleep earlier this week (${pt.weekShort.toFixed(1)} h/night under 7.5)`, -Math.min(5, 1.5 * pt.weekShort));
   if (pt.lowMoodDays >= 3) add('pattern', 'moodstreak', `Low mood ${pt.lowMoodDays} mornings running`, -3);
   if (pt.badSleepDays >= 3) add('pattern', 'sleepstreak', `Bad sleep ${pt.badSleepDays} nights running`, -3);
+  // ---- overlaps (v2.1): related factors reinforce each other instead of adding up in full
+  // 1) your morning answers already reflect last night, so last-night penalties count at 75% once you've answered
+  if (inp.report) R.forEach(x => { if (CARRY.includes(x.key) && x.v < 0) { x.v *= 0.75; x.label += ' · partly in your morning answers'; } });
+  // 2) within a group, the biggest counts in full and the rest count less (biggest = largest effect right now)
+  OVERLAP.forEach(([keys, w2, wRest]) => { const xs = R.filter(x => keys.includes(x.key) && x.v < 0).sort((p, q) => p.v - q.v);
+    xs.forEach((x, i) => { if (i === 0) return; const f = i === 1 ? w2 : wRest; x.v *= f; x.label += ` · overlaps, ${Math.round(f * 100)}%`; }); });
+  // 3) all day tags together stay within ±15
+  { const ts = R.filter(x => x.layer === 'tags').reduce((s, x) => s + x.v, 0); if (Math.abs(ts) > 15) add('tags', 'tagcap', 'Day tags capped at ±15', Math.sign(ts) * 15 - ts); }
   let raw = 75 + R.reduce((s, x) => s + x.v, 0);
   // ---- 13 your energy checks: a nudge, not an override
   //   your rating is read on your own scale (rateBias: how your ratings usually sit vs the model, after 10+ checks);

@@ -146,3 +146,10 @@ Tapping a Moment or timed tag opens a small panel (time, starting at now, and OK
 
 ## v1.12.4 — Compact Me page
 Body now back to 6 tiles (BMR restored). Measurements is one line (last check · Update) that opens the measurement changes and the physique card. Your calories is one line (daily target · Target history ›) that opens the step-by-step maths. Goal and Profile cards removed from Me: both are in Edit.
+
+## v1.13.0 — Energy model v2.1 (overlaps) and a sturdier sleep button
+- **Overlaps:** related factors reinforce each other instead of adding in full. Last-night carry-over (sleep debt, late bedtime, body-clock shift, cannabis morning fog, heavy-smoking day, hangover, yesterday's party/sick/football, late sport, late meal, late caffeine, bad-sleep streak) ×0.75 once the morning questions are answered; within that group biggest ×1, second ×0.6, rest ×0.4. Hunger/under-eating/low protein: 1, 0.5, 0.5. Couch/fog: 1, 0.5. Tired-now group (crashed, productive, gym, football, racket, spicy, hot shower, stressed): 1, 0.5, 0.3. Dip + food coma: 1, 0.6. Tag cap ±15 applied after. Every reduced line is labelled in the breakdown.
+- **Sleep need:** 7 h; with 7+ nights in the last 14, halfway between 7 and your average, clamped 6.5–7.5. Applies to the sleep curve and sleep debt.
+- **Hits:** 3–4 quick taps are spread over up to the last hour (5+ as before). Per-session effect already grows with √hits.
+- **Sleep button:** the start is kept in config and as a backup on that day; a server copy can't erase a pending sleep; a start over 16 h old is cleared without logging; saving the morning check-in by hand clears a forgotten start.
+- On a sample of 20 Nov's morning, v2 gave 24 at waking and 47 at 11:50; v2.1 gives 42 and 65 (with the Great mood tag).
