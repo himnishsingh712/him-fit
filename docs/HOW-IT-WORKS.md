@@ -184,3 +184,6 @@ The ‹ date › arrows appear only on Today. The date picked there applies to e
 
 ## v1.17.2 — Edit no longer touches your weigh-ins
 Before, Edit → Save pre-filled "Weight today" with the latest *corrected* weight and wrote it back over that day's raw scale number whenever it differed, so every save shrank the weigh-in (up to 1.4%), and a save on a day without a weigh-in invented one. Now the field pre-fills the raw scale number, and Save logs a weigh-in (with the current time) only if you typed a different number, or on first setup. 19 Nov's reading was restored to the scale's 70.0 kg.
+
+## v1.17.3 — B12 daily
+Methylcobalamin 1500 moves from 2 tablets on Sundays to 1 tablet daily with breakfast, from 21 Nov 2026 (supplement schedules can now have a `from` date). Daily until the early-Feb 2027 retest. The "missed 2 days running" flag applies to it like the other daily supplements.

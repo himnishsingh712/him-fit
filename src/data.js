@@ -176,7 +176,7 @@ export const SUPPS = [
   {id:'fish', name:'Tata 1mg 4X Salmon Omega', dose:'1 capsule', sched:{type:'daily'}, v:{o3:600, vE:1}},
   {id:'limcee', name:'Limcee 500', dose:'1 chewable', sched:{type:'daily', until:'2026-12-31'}, v:{vC:500}},
   {id:'d3', name:'Calciquick-D3 60K', dose:'1 capsule', sched:{type:'d3'}, v:{vD:1500}},
-  {id:'b12', name:'Methylcobalamin 1500', dose:'2 tablets', sched:{type:'weekly', dow:0}, v:{b12:3000}},
+  {id:'b12', name:'Methylcobalamin 1500', dose:'1 tablet', sched:{type:'daily', from:'2026-11-21'}, v:{b12:1500}}, // daily until the Feb 2027 retest (was 2 tablets on Sundays)
 ];
 
 export const DEFAULT_CONFIG = {
