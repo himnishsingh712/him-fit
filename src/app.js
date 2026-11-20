@@ -44,11 +44,16 @@ const ICON = {
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
   user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   lift:'<path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/>',
-  bong:'<path d="M10 2.5h3.5M10.6 2.5v8.2M12.9 2.5v8.2M10.6 10.7a4.6 4.6 0 1 0 2.3 0M15.2 14.2l3-2.2M8 20.6h8.6"/><path d="M17.4 7.2c.9-.9-.3-1.8.6-2.7M19.6 9c.9-.9-.3-1.8.6-2.7"/>',
-  pushup:'<circle cx="4.6" cy="9.4" r="1.6"/><path d="M6.4 10.2l13 3.2M8.4 10.9l-.6 4.6M19.4 13.4l1.2 1.9M2.5 17.2h19"/>',
-  squat:'<circle cx="11.5" cy="3.8" r="1.6"/><path d="M11.4 5.8l-.9 5.4 4.6 1.8-1 5.4M10.7 7.6h6M13.6 18.4h2M6.5 20.6h12"/>',
-  mobility:'<circle cx="12" cy="3.9" r="1.6"/><path d="M12 6v7.2M12 7.6l-4.2-4.2M12 7.6l4.2-4.2M12 13.2l-4.4 7.2M12 13.2l4.4 7.2"/>',
 };
+// bold glyphs for the quick row: solid shapes (heads, bodies) + thick round strokes for limbs
+const F = 'fill="currentColor" stroke="none"', L = w => `fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"`;
+const GLYPHS = {
+  bong: `<rect x="10.3" y="1.6" width="3.4" height="1.6" rx=".8" ${F}/><rect x="10.7" y="2.6" width="2.6" height="9" ${F}/><circle cx="12" cy="15.4" r="4.7" ${F}/><rect x="7.4" y="19.6" width="9.2" height="2" rx="1" ${F}/><path d="M15.6 13.8l3.2-2.3" ${L(2.2)}/><path d="M17.6 7.4c1-1-.4-2 .6-3M20 9.2c1-1-.4-2 .6-3" ${L(1.5)}/>`,
+  pushup: `<circle cx="4.4" cy="8.6" r="2.2" ${F}/><path d="M6.8 9.6l13.6 3.6" ${L(3)}/><path d="M8.6 10.6l-.5 5.4" ${L(2.6)}/><path d="M20.4 13.2l.8 2.4" ${L(2.4)}/><rect x="2" y="17.2" width="20" height="1.8" rx=".9" ${F}/>`,
+  squat: `<circle cx="11.6" cy="3.6" r="2.2" ${F}/><path d="M11.4 6.6l-1 5.2 5.2 1.6-1.2 5.4" ${L(3)}/><path d="M11.2 8.2h6" ${L(2.4)}/><rect x="6.2" y="19.6" width="12" height="1.8" rx=".9" ${F}/>`,
+  mobility: `<circle cx="12" cy="3.5" r="2.2" ${F}/><path d="M12 6.6v6.8" ${L(3)}/><path d="M12 8.2L7.6 4.4M12 8.2l4.4-3.8" ${L(2.4)}/><path d="M12 13.4l-4.2 6.8M12 13.4l4.2 6.8" ${L(2.6)}/>`,
+};
+const glyph = (n, s = 28) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">${GLYPHS[n]}</svg>`;
 const ic = (n, s=22, w=2) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 
 // ================= meals =================
@@ -148,7 +153,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.16.1';
+const APP_VERSION = '1.16.2';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -898,7 +903,7 @@ function todayStrip(k, tot) {
 }
 function quickAdd(k) {
   // one-tap actions that change your energy right away; each push-up / squat tap is one set in Training
-  return `<div class="span2 qadd" style="grid-template-columns:repeat(4,minmax(0,1fr))"><button class="btn qi" data-act="qhit" aria-label="Add 1 bong hit">${ic('bong', 28, 1.8)}<span>+1</span></button><button class="btn qi" data-act="qtr" data-id="pushup" data-n="10" aria-label="Add 10 push-ups">${ic('pushup', 30, 1.8)}<span>+10</span></button><button class="btn qi" data-act="qtr" data-id="bwsquat" data-n="25" aria-label="Add 25 squats">${ic('squat', 28, 1.8)}<span>+25</span></button><button class="btn qi" data-act="qmob" aria-label="Log mobility">${ic('mobility', 28, 1.8)}</button></div>${sleepStartAt() ? `<div class="span2 muted small" style="text-align:center">Sleeping since ${tlabel(sleepStartAt())} · <a href="#" data-act="sleepundo">Undo</a></div>` : ''}`;
+  return `<div class="span2 qadd" style="grid-template-columns:repeat(4,minmax(0,1fr))"><button class="btn qi" data-act="qhit" aria-label="Add 1 bong hit">${glyph('bong', 28)}<span>+1</span></button><button class="btn qi" data-act="qtr" data-id="pushup" data-n="10" aria-label="Add 10 push-ups">${glyph('pushup', 30)}<span>+10</span></button><button class="btn qi" data-act="qtr" data-id="bwsquat" data-n="25" aria-label="Add 25 squats">${glyph('squat', 28)}<span>+25</span></button><button class="btn qi" data-act="qmob" aria-label="Log mobility">${glyph('mobility', 28)}</button></div>${sleepStartAt() ? `<div class="span2 muted small" style="text-align:center">Sleeping since ${tlabel(sleepStartAt())} · <a href="#" data-act="sleepundo">Undo</a></div>` : ''}`;
 }
 function lastSitting() {
   for (const k of [todayKey(), addDays(todayKey(), -1)]) { const its = (S.days[k]?.items || []).filter(it => it.t).sort((a, b) => a.t - b.t); if (its.length) { const t = its[its.length-1].t; return its.filter(it => t - it.t <= 20 * 60e3); } }
