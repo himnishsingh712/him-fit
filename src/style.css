@@ -154,3 +154,9 @@ input[type=date].field,input[type=time].field{appearance:none;-webkit-appearance
 .linkish{background:none;border:none;padding:0;text-align:left;color:inherit;font:inherit;flex:1;min-width:0}
 .saved{outline:2px solid var(--ok);outline-offset:2px;transition:outline-color .3s}
 button.li.linkish{padding:8px 0;align-items:center;gap:10px}
+.toprow{display:flex;justify-content:space-between;align-items:center;padding-top:8px}
+.datenav2{display:flex;align-items:center;gap:2px;margin-left:-6px}
+.iconbtn.sm{width:30px;height:30px;min-height:30px}
+.pillsm{display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap;padding:0 14px;min-height:34px;font-size:14px}
+.top{padding-top:2px}
+.top a.pill.pillsm{min-height:34px;height:34px;padding:0 14px;font-size:14px;align-self:center}

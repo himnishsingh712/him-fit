@@ -144,7 +144,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '1.14.1';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -437,9 +437,11 @@ function status(nk, v) {
 function barColor(nk, v) { const s = status(nk, v); if (!s) return 'var(--muted)'; return s[0] === 'ok' ? 'var(--ok)' : s[0] === 'close' ? 'var(--acc)' : 'var(--over)'; }
 function header(title, opts = {}) {
   const k = S.date, t = todayKey();
-  const dn = opts.date === false ? '' : `<div class="datenav"><button class="iconbtn" data-act="day" data-n="-1" aria-label="Previous day">${ic('left')}</button><button class="iconbtn" data-act="day" data-n="1" aria-label="Next day" ${k >= t ? 'disabled' : ''}>${ic('right')}</button></div>`;
-  const label = opts.date === false ? '' : (k === t ? niceDate(k) : `${niceDate(k)} · <a href="#" data-act="gotoday">back to today</a>`);
-  return `<div class="top"><div><div class="sub">${label}</div><h1>${esc(title)}</h1><button class="status" id="sync" data-act="account" aria-label="Account and sync">${syncHTML()}</button></div>${opts.right || dn}</div>`;
+  // date row: ‹ date › on the left (arrows sit with the date they change), optional corner button on the right
+  const arrows = opts.date !== false;
+  const label = opts.date === false ? '' : (k === t ? niceDate(k) : `${niceDate(k)} · <a href="#" data-act="gotoday">today</a>`);
+  const dateRow = (arrows || opts.corner) ? `<div class="toprow"><div class="datenav2">${arrows ? `<button class="iconbtn sm" data-act="day" data-n="-1" aria-label="Previous day">${ic('left', 16)}</button><span class="sub">${label}</span><button class="iconbtn sm" data-act="day" data-n="1" aria-label="Next day" ${k >= t ? 'disabled' : ''}>${ic('right', 16)}</button>` : ''}</div>${opts.corner || ''}</div>` : '';
+  return `${dateRow}<div class="top"><div><h1>${esc(title)}</h1><button class="status" id="sync" data-act="account" aria-label="Account and sync">${syncHTML()}</button></div>${opts.right || ''}</div>`;
 }
 function baseStepper(id, base, add) {
   const tot = base + add;
@@ -473,7 +475,7 @@ function weightChart(keys) {
 // ================= views =================
 function viewToday() {
   const k = S.date, d = day(k), c = dayCalc(d); const tot = c.tot;
-  let h = header(k === todayKey() ? 'Today' : 'Day', {right: `<div style="display:flex;gap:6px;align-items:center"><a class="iconbtn" href="#me" aria-label="Me" style="display:inline-flex;align-items:center;justify-content:center;color:inherit">${ic('user', 20)}</a><a class="pill" href="#checkin" style="display:inline-flex;align-items:center;text-decoration:none">Check-in</a><div class="datenav"><button class="iconbtn" data-act="day" data-n="-1" aria-label="Previous day">${ic('left')}</button><button class="iconbtn" data-act="day" data-n="1" aria-label="Next day" ${k >= todayKey() ? 'disabled' : ''}>${ic('right')}</button></div></div>`});
+  let h = header(k === todayKey() ? 'Today' : 'Day', {corner: `<a class="iconbtn sm" href="#me" aria-label="Me" style="display:inline-flex;align-items:center;justify-content:center;color:inherit">${ic('user', 18)}</a>`, right: `<a class="pill pillsm" href="#checkin">Check-in</a>`});
   const fl = k === todayKey() ? flags(k) : [];
   h += '<div class="grid">';
   try { h += todayStrip(k, tot); } catch (er) { console.error(er); }
