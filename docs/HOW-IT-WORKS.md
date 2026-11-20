@@ -173,3 +173,8 @@ Every dated screen: "‹ date ›" on the top-left (arrows next to the date they
 
 ## v1.16.0 — One Sleep card
 Check-in's "Sleep last night" and "Naps" cards are one **Sleep** card: night sleep and naps listed together (from the 🌙 button or added by hand). **+ Add sleep** asks fell asleep / woke up and classifies like the sleep button: starting 8 PM–8 AM or lasting 5 h+ = night sleep (saved to the morning answers if they exist, else as `ci.slp`, and sets the day's sleep hours); anything else = a nap. Tap an entry to change its times or remove it.
+
+## v1.17.0 — Training on Trends, training export
+- Trends (7/30/90 days): **Training** card (active days, kcal burned, sets, minutes, daily training-calorie bars; blue = sport day); **Sets per muscle, by week** (last 8 Mon–Sun weeks, shaded: <5, 5–10, 10–20 green, 20+; most/least trained over the last 4 weeks); **Lift progress** (best set each time, estimated 1-rep max for weighted lifts, as a small line).
+- Training tab keeps today and this week; its text progress card moved to Trends (a link points there).
+- Export: **Training (CSV)** — one row per set (sports one row) with date, time, exercise, equipment, reps, weight, minutes, kcal. The JSON backup includes training.
