@@ -153,7 +153,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.17.0';
+const APP_VERSION = '1.17.1';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -462,10 +462,13 @@ function status(nk, v) {
 function barColor(nk, v) { const s = status(nk, v); if (!s) return 'var(--muted)'; return s[0] === 'ok' ? 'var(--ok)' : s[0] === 'close' ? 'var(--acc)' : 'var(--over)'; }
 function header(title, opts = {}) {
   const k = S.date, t = todayKey();
-  // date row: ‹ date › on the left (arrows sit with the date they change), optional corner button on the right
-  const arrows = opts.date !== false;
-  const label = opts.date === false ? '' : (k === t ? niceDate(k) : `${niceDate(k)} · <a href="#" data-act="gotoday">today</a>`);
-  const dateRow = (arrows || opts.corner) ? `<div class="toprow"><div class="datenav2">${arrows ? `<button class="iconbtn sm" data-act="day" data-n="-1" aria-label="Previous day">${ic('left', 16)}</button><span class="sub">${label}</span><button class="iconbtn sm" data-act="day" data-n="1" aria-label="Next day" ${k >= t ? 'disabled' : ''}>${ic('right', 16)}</button>` : ''}</div>${opts.corner || ''}</div>` : '';
+  // The date is changed only on Today (‹ date ›); it applies to every screen. Other screens show it read-only:
+  // muted when it's today, amber "Viewing <date> · change on Today" when it isn't (tap → Today).
+  const arrows = !!opts.nav, show = opts.date !== false;
+  let dateEl = '';
+  if (arrows) dateEl = `<button class="iconbtn sm" data-act="day" data-n="-1" aria-label="Previous day">${ic('left', 16)}</button><span class="sub">${k === t ? niceDate(k) : `${niceDate(k)} · <a href="#" data-act="gotoday">today</a>`}</span><button class="iconbtn sm" data-act="day" data-n="1" aria-label="Next day" ${k >= t ? 'disabled' : ''}>${ic('right', 16)}</button>`;
+  else if (show) dateEl = k === t ? `<span class="sub">${niceDate(k)}</span>` : `<a href="#today" class="sub pastday" aria-label="Viewing a past day; change the date on Today">Viewing ${niceDate(k)} · change on Today</a>`;
+  const dateRow = (dateEl || opts.corner) ? `<div class="toprow"><div class="datenav2${arrows ? '' : ' ro'}">${dateEl}</div>${opts.corner || ''}</div>` : '';
   return `${dateRow}<div class="top"><div><h1>${esc(title)}</h1><button class="status" id="sync" data-act="account" aria-label="Account and sync">${syncHTML()}</button></div>${opts.right || ''}</div>`;
 }
 function baseStepper(id, base, add) {
@@ -500,7 +503,7 @@ function weightChart(keys) {
 // ================= views =================
 function viewToday() {
   const k = S.date, d = day(k), c = dayCalc(d); const tot = c.tot;
-  let h = header(k === todayKey() ? 'Today' : 'Day', {corner: `<a class="iconbtn sm" href="#me" aria-label="Me" style="display:inline-flex;align-items:center;justify-content:center;color:inherit">${ic('user', 18)}</a>`, right: `<div style="display:flex;gap:6px;align-items:center">${k !== todayKey() ? '' : sleepStartAt() ? `<button class="pill pillsm on2" data-act="sleepend">☀️ I'm awake</button>` : `<button class="pill pillsm ghost2" data-act="sleepstart">🌙 Sleep</button>`}<a class="pill pillsm" href="#checkin">Check-in</a></div>`});
+  let h = header(k === todayKey() ? 'Today' : 'Day', {nav: true, corner: `<a class="iconbtn sm" href="#me" aria-label="Me" style="display:inline-flex;align-items:center;justify-content:center;color:inherit">${ic('user', 18)}</a>`, right: `<div style="display:flex;gap:6px;align-items:center">${k !== todayKey() ? '' : sleepStartAt() ? `<button class="pill pillsm on2" data-act="sleepend">☀️ I'm awake</button>` : `<button class="pill pillsm ghost2" data-act="sleepstart">🌙 Sleep</button>`}<a class="pill pillsm" href="#checkin">Check-in</a></div>`});
   const fl = k === todayKey() ? flags(k) : [];
   h += '<div class="grid">';
   try { h += todayStrip(k, tot); } catch (er) { console.error(er); }
