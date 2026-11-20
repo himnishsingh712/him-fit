@@ -142,7 +142,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.12.4';
+const APP_VERSION = '1.13.0';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -266,7 +266,7 @@ async function pull() {
   });
   if (last) LS.set(lk('since'), last);
   const c = await sb.from('config').select('data').maybeSingle();
-  if (cfgDirty && S.config) saveConfig(S.config); else if (!c.error) { S.config = c.data ? c.data.data : null; LS.set(lk('config'), S.config); }
+  if (cfgDirty && S.config) saveConfig(S.config); else if (!c.error) { const localZ = S.config?.zz; S.config = c.data ? c.data.data : null; if (localZ && S.config && !S.config.zz) { S.config.zz = localZ; saveConfig(S.config); } else LS.set(lk('config'), S.config); }
   DV++; if (PROF()) setTimeout(logTargetChange, 0); if (S.autoSetup && PROF() && S.view === 'setup') { S.autoSetup = false; S.pf = null; route(); return; }
   saveLocal(); render(); setSync(Object.keys(dirty).length ? 'saving' : 'ok');
 }
@@ -323,11 +323,14 @@ function sleepTimes(k) { const p = PROF() || {}; const ci = S.days[k]?.ci || {};
   if ((!mc || mc.skipped) && ci.slp) return {bed: ci.slp.s, wake: ci.slp.e, real: false}; // from the sleep button, before the morning questions
   const bed = mc?.bed || p.bed || '01:00', wake = mc?.wake || p.wake || '09:00'; return {bed: bedMs(k, bed), wake: atClock(k, wake, false), real: !!(mc && mc.bed && !mc.skipped && mc.sq != null)}; }
 // sleep button: one 'Going to sleep' / 'I'm awake' pair for night sleep and naps
+// the start is kept in config (zz) AND as a backup on that day (ci.zz), so a sync can't erase it
+function sleepStartAt() { const z = CFG().zz?.t; if (z) return z; const t = todayKey(); for (const kk of [t, addDays(t, -1)]) { const b = S.days[kk]?.ci?.zz; if (b) return b; } return null; }
 const keyAt = ms => keyOf(new Date(ms - 6 * 3600e3));
 const isNight = (s, e) => { const h = new Date(s).getHours(); return h >= 20 || h < 8 || e - s >= 5 * 3600e3; };
 function sleepEnd() {
-  const c = CFG(); const s = c.zz?.t, e = Date.now(); if (!s) return;
-  delete c.zz; saveConfig(c);
+  const c = CFG(); const s = sleepStartAt(), e = Date.now(); if (!s) return;
+  delete c.zz; saveConfig(c); { const kb = keyAt(s); const db = S.days[kb]; if (db?.ci?.zz) { delete db.ci.zz; touch(kb); } }
+  if (e - s > 16 * 3600e3) { toast('That sleep start was over 16 h ago — cleared, not logged'); return; }
   if (e - s < 10 * 60e3) { toast('Under 10 minutes — not logged'); return; }
   if (!isNight(s, e)) { const ks = keyAt(s), d = day(ks); d.ci = d.ci || {}; d.ci.naps = d.ci.naps || []; d.ci.naps.push({id: uid(), s, e}); touch(ks); toast(`Nap logged · ${fmtH((e - s) / 3600e3)}`); return; }
   const kw = keyAt(e), d = day(kw); d.ci = d.ci || {}; d.ci.slp = {s, e};
@@ -360,13 +363,16 @@ function energyInput(k) {
   // how your ratings usually sit against the model (needs 10+ checks with the model's score saved)
   const allR = allKeys().flatMap(x => (S.days[x]?.ci?.er || []).filter(r => r.v && r.m != null)).slice(-30);
   const rateBias = allR.length >= 10 ? mean(allR.map(r => RATE_SCORE[r.v] - r.m)) : 0;
-  return {pattern, rateBias, events: (ci.ev || []).map(x => ({t: x.t, k: x.k})), rates: (ci.er || []).filter(r => r.v).map(r => ({t: r.t, v: r.v})),
+  // sleep need: 7 h, moving halfway toward your own average once there are 7+ nights in the last 14 (never below 6.5)
+  const nights = Array.from({length: 14}, (_, i) => S.days[addDays(k, -i - 1)]?.ci?.sl).filter(x => x != null && x > 2);
+  const sleepNeed = nights.length >= 7 ? Math.min(7.5, Math.max(6.5, (7 + mean(nights)) / 2)) : 7;
+  return {pattern, rateBias, sleepNeed, events: (ci.ev || []).map(x => ({t: x.t, k: x.k})), rates: (ci.er || []).filter(r => r.v).map(r => ({t: r.t, v: r.v})),
     wake: st.wake, bed: st.bed, real: st.real, usualWakeMin: minOf(p.wake || '09:00'), usualBedMin: minOf(p.bed || '01:00'),
     priorSleep: [1, 2, 3].map(i => { const c = S.days[addDays(k, -i)]?.ci; return c?.sl != null ? c.sl + 0.7 * napHours(c) : null; }), report: ci.mc && !ci.mc.skipped && ci.mc.sq != null && ci.mc.mood != null && ci.mc.feel != null ? {sq: ci.mc.sq, mood: ci.mc.mood, feel: ci.mc.feel} : null,
     naps: (ci.naps || []).map(n => ({s: n.s, e: n.e})), intakes, caffeine, water, hits: ci.hitsT || [], tags: ci.tags || [], yTags: y.ci?.tags || [], yEvents: (y.ci?.ev || []).map(x => ({t: x.t, k: x.k})), hitsAvg7: h7.length ? mean(h7) : 0, lastNight, targets: {kcal: T('kcal'), p: T('p'), water: waterTarget()}};
 }
 // the bedtime you reported the next morning, if any (ends that day's curve)
-function realBedMs(k) { const nk = addDays(k, 1); const zz = CFG().zz?.t; if (zz && keyAt(zz) === k && zz > sleepTimes(k).wake + 3600e3) return zz;
+function realBedMs(k) { const nk = addDays(k, 1); const zz = sleepStartAt(); if (zz && keyAt(zz) === k && zz > sleepTimes(k).wake + 3600e3) return zz;
   const sp = S.days[nk]?.ci?.slp; if (sp && keyAt(sp.s) === k && !S.days[nk]?.ci?.mc?.bed) return sp.s; const mc = S.days[nk]?.ci?.mc; if (!mc || mc.skipped || !mc.bed) return null; const b = bedMs(nk, mc.bed), w = sleepTimes(k).wake; return b > w + 3600e3 ? b : null; }
 function dayEnd(k) { return realBedMs(k) ?? endOfDayMs(k); }
 function energyFor(k, now = Date.now(), opt = {}) { const inp = energyInput(k); if (opt.noRates) inp.rates = []; const rb = realBedMs(k); const end = rb ?? Math.max(endOfDayMs(k), Math.min(now, endOfDayMs(k) + 3 * 3600e3)); const ci = S.days[k]?.ci || {}; return {inp, ...energyDay(inp, Math.min(now, end), end), end, rates: ci.er || [], evs: ci.ev || []}; }
@@ -702,7 +708,7 @@ function morningCard(k) {
     ${hasY ? `${row('yr', 'Yesterday, how was your energy really?', ['Awful','Low','Okay','Good','Great'])}<div class="fl">Was yesterday's food log complete?<div class="btns c2"><button class="btn ${m.lc === true ? 'on' : ''}" data-act="mcset" data-f="lc" data-v="1">Yes, all logged</button><button class="btn ${m.lc === false ? 'on' : ''}" data-act="mcset" data-f="lc" data-v="0">No, missed some</button></div></div>` : ''}
     <button class="btn primary" data-act="mcsave" ${m.sq == null || m.mood == null || m.feel == null ? 'disabled style="opacity:.5"' : ''}>Save</button></div>`;
 }
-function saveMorning(k) {
+function saveMorning(k) { { const st = sleepStartAt(); if (st && Date.now() - st > 3600e3) { const c0 = CFG(); delete c0.zz; saveConfig(c0); const kb = keyAt(st), db = S.days[kb]; if (db?.ci?.zz) { delete db.ci.zz; touch(kb); } } }
   const m = S.mc; const d = day(k); d.ci = d.ci || {};
   const b = bedMs(k, m.bed), w = atClock(k, m.wake, false); const sl = Math.round((w - b) / 3600e3 * 4) / 4;
   d.ci.mc = {bed: m.bed, wake: m.wake, sq: m.sq, mood: m.mood, feel: m.feel, t: Date.now()}; if (m.tags?.length) d.ci.tags = m.tags.slice();
@@ -772,10 +778,11 @@ function energyBreakdown() {
     <p><b>Day tags (timed, from when you tap):</b> crashed −8 easing off over 3 h; great mood +4 for 3 h; productive +1 for 1 h then −3 for 3 h; gym +5 for 1.5 h then −3 (2–5 h after); football +5 for 1 h then −6 (1.5–5 h after) and −3 next morning; racket +5 for 1 h then −3 (1.5–4 h after); chill +3 for 3 h. Any sport within 2 h of bedtime: −3 next morning. Sport also raises that day's water target (football +750 ml, racket and gym +500 ml). All tags together are capped at ±15.</p>
     <p><b>Moments:</b> cool shower +7 right after, gone in ~75 min. Hot shower +3 for 20 min, then −4 relaxed for about an hour. 🌶️ +3 for 20 min, then −7 relaxed, gone in 2 h.</p>
     <p><b>Patterns:</b> eating within 2 h of bed costs −3 next morning (within 1 h, −5); caffeine still in you at bedtime costs up to −6 next morning; both halve when you've answered the morning questions (your sleep-quality answer already carries part of it) and fade by midday. Short sleep on nights 4–7 back costs up to −5 all day. Low mood, or bad sleep, 3+ mornings running: −3 each.</p>
+    <p><b>Overlaps (v2.1):</b> related things reinforce each other instead of adding up in full. Last-night penalties (sleep debt, late bedtime, body clock, morning fog, hangover, next-morning effects of party, sickness or football, late meal or caffeine, bad-sleep streak) count at 75% once you've answered the morning questions, and among them the biggest counts in full, the second at 60%, the rest at 40%. Same idea for: hunger, under-eating and low protein (biggest full, others 50%); couch phase and fog (50%); tiredness from crashing, sport, mental work, 🌶️, a hot shower or stress (second 50%, rest 30%); the afternoon dip and a food coma (60%). The breakdown marks every reduced line. Sleep need is 7 h, moving halfway toward your own average once there are 7+ nights (never below 6.5 h). 3–4 quick hit taps are spread over up to the last hour; each extra hit in one sitting adds less than the one before.</p>
     <p><b>Your energy checks:</b> a nudge, not an override. Your rating is read on your own scale (after 10 checks the app learns how your ratings usually sit against the model). If it's within 8 points of the model, nothing changes. Beyond that the score moves 30% of the extra gap, never more than ±10, fading to nothing over 3 hours — and only half that if the model has strong reasons (score 40 or under, or 80 or over) and your rating points the other way. The prediction stored for comparison leaves this out, so the model is still tested fairly.</p>
     <p><b>Not counted:</b> cigarettes (your call) and training (no time recorded).</p>
     <p><b>Day split:</b> your waking day (wake-up to bedtime) is cut into three equal parts. 'So far' is the part already lived; 'forecast' assumes nothing else happens (no more food or water). Once the next morning's check-in gives your real bedtime, that day ends there.</p>
-    <p><b>Model ${MODEL_VERSION} (from 19 Nov), frozen until 16 Dec 2026.</b> Until then none of these numbers change. On 16 Dec every layer is tested against your energy checks: layers that don't help get cut or re-weighted, one at a time.</p></div></details>`;
+    <p><b>Model ${MODEL_VERSION} (v2 from 19 Nov, v2.1 overlaps from 20 Nov), frozen until 16 Dec 2026.</b> Until then none of these numbers change. On 16 Dec every layer is tested against your energy checks: layers that don't help get cut or re-weighted, one at a time.</p></div></details>`;
 }
 function energyCompareCard() {
   const ks = allKeys().filter(k => S.days[k]?.ci?.eRep && S.days[k]?.ci?.ePred).slice(-30);
@@ -792,7 +799,7 @@ function energyCompareCard() {
 // quick energy ratings: up to 3 a day, 3, 7 and 11 h after waking
 const RATE_SLOTS = [3, 7, 11], RATE_W = ['Awful','Low','Okay','Good','Great'];
 function rateSlotNow(k) {
-  if (k !== todayKey() || CFG().zz) return null; const ci = S.days[k]?.ci || {}; const a = (Date.now() - sleepTimes(k).wake) / 3600e3;
+  if (k !== todayKey() || sleepStartAt()) return null; const ci = S.days[k]?.ci || {}; const a = (Date.now() - sleepTimes(k).wake) / 3600e3;
   let s = -1; RATE_SLOTS.forEach((h, i) => { if (a >= h) s = i; }); if (s < 0 || a > 16) return null;
   return (ci.er || []).some(r => r.s === s) ? null : s;
 }
@@ -811,7 +818,7 @@ function todayStrip(k, tot) {
 function quickAdd(k) {
   const d = day(k), due = dueList(k), done = due.length && due.every(x => d.supp?.[x.id]);
   const sup = !due.length ? '' : done ? `<button class="btn on" data-act="suppundo" aria-label="Supplements taken, tap to undo">✓ Supps</button>` : `<button class="btn" data-act="suppall">Took supps</button>`;
-  return `<div class="span2 qadd" style="grid-template-columns:repeat(${sup ? 4 : 3},minmax(0,1fr))"><button class="btn" data-act="qhit">+1 hit</button><button class="btn wbtn" data-act="water" data-n="250">+250 ml</button>${CFG().zz ? `<button class="btn on" data-act="sleepend">☀️ I'm awake</button>` : `<button class="btn" data-act="sleepstart">😴 Going to sleep</button>`}${sup}</div>${CFG().zz ? `<div class="span2 muted small" style="text-align:center">Sleeping since ${tlabel(CFG().zz.t)} · <a href="#" data-act="sleepundo">Undo</a></div>` : ''}`;
+  return `<div class="span2 qadd" style="grid-template-columns:repeat(${sup ? 4 : 3},minmax(0,1fr))"><button class="btn" data-act="qhit">+1 hit</button><button class="btn wbtn" data-act="water" data-n="250">+250 ml</button>${sleepStartAt() ? `<button class="btn on" data-act="sleepend">☀️ I'm awake</button>` : `<button class="btn" data-act="sleepstart">😴 Going to sleep</button>`}${sup}</div>${sleepStartAt() ? `<div class="span2 muted small" style="text-align:center">Sleeping since ${tlabel(sleepStartAt())} · <a href="#" data-act="sleepundo">Undo</a></div>` : ''}`;
 }
 function lastSitting() {
   for (const k of [todayKey(), addDays(todayKey(), -1)]) { const its = (S.days[k]?.items || []).filter(it => it.t).sort((a, b) => a.t - b.t); if (its.length) { const t = its[its.length-1].t; return its.filter(it => t - it.t <= 20 * 60e3); } }
@@ -1138,9 +1145,9 @@ document.addEventListener('click', e => {
     case 'daytag': { d.ci = d.ci || {}; const t = d.ci.tags = d.ci.tags || []; const i = t.indexOf(id); if (i >= 0) t.splice(i, 1); else t.push(id); touch(k); break; }
     case 'mcsave': saveMorning(k); toast('Morning check-in saved'); break;
     case 'mcskip': e.preventDefault(); d.ci = d.ci || {}; d.ci.mc = {skipped: true, t: Date.now()}; S.mc = null; touch(k); break;
-    case 'sleepstart': { const c = CFG(); c.zz = {t: Date.now()}; saveConfig(c); toast(`Good night · from ${tlabel(Date.now())}`); break; }
+    case 'sleepstart': { const now = Date.now(), c = CFG(); c.zz = {t: now}; saveConfig(c); const kb = keyAt(now), db = day(kb); db.ci = db.ci || {}; db.ci.zz = now; touch(kb); toast(`Good night · from ${tlabel(now)}`); break; }
     case 'sleepend': sleepEnd(); break;
-    case 'sleepundo': { e.preventDefault(); const c = CFG(); delete c.zz; saveConfig(c); toast('Undone'); break; }
+    case 'sleepundo': { e.preventDefault(); const c = CFG(); const st = sleepStartAt(); delete c.zz; saveConfig(c); if (st) { const kb = keyAt(st), db = S.days[kb]; if (db?.ci?.zz) { delete db.ci.zz; touch(kb); } } toast('Undone'); break; }
     case 'energyinfo': e.preventDefault(); S.sheet = {type: 'energy'}; render(); break;
     case 'meopen': S.meOpen = S.meOpen || {}; S.meOpen[id] = !S.meOpen[id]; render(); break;
     case 'histsheet': e.preventDefault(); S.sheet = {type: 'hist'}; render(); break;
