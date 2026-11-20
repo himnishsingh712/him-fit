@@ -153,7 +153,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.17.1';
+const APP_VERSION = '1.17.2';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -1005,7 +1005,7 @@ function logTargetChange() {
 }
 // ================= profile: setup + Me =================
 const PF_DEFAULT = {name:'', dob:'', sex:'m', heightCm:'', weightKg:'', waist:'', neck:'', hip:'', experience:'new', trainDays:4, sessionMin:60, activity:'sit', diet:'egg', wake:'09:00', bed:'01:00', goal:'leanbulk', targetKg:'', pace:0.25};
-function startSetup() { const p = PROF(); S.pf = Object.assign({}, PF_DEFAULT, p || {}); const w = weightList(); if (w.length) S.pf.weightKg = w[w.length-1].w; }
+function startSetup() { const p = PROF(); S.pf = Object.assign({}, PF_DEFAULT, p || {}); const raw = allKeys().filter(k => S.days[k]?.ci?.w > 0); if (raw.length) S.pf.weightKg = +S.days[raw[raw.length-1]].ci.w; S.pfW0 = num(S.pf.weightKg); } // prefill the raw scale number (never the corrected one), remember it so Save only logs a weigh-in you typed
 const num = v => v === '' || v == null ? null : +v;
 function pfPreview() {
   const p = S.pf; const kg = num(p.weightKg), h = num(p.heightCm), age = ageAt(p.dob, todayKey());
@@ -1046,8 +1046,8 @@ function savePF() {
   if (!GMAP[out.goal].paces.includes(out.pace)) out.pace = GMAP[out.goal].paces[0];
   out.updatedAt = new Date().toISOString();
   const k = todayKey(), d = day(k); d.ci = d.ci || {};
-  if (!d.ci.w) d.ci.w = out.weightKg;
-  if (PROF() && out.weightKg !== +PROF().weightKg) d.ci.w = out.weightKg;
+  // log a weigh-in only when you typed a new weight (or on first setup); untouched saves never rewrite or invent one
+  if (!PROF() ? !d.ci.w : out.weightKg !== S.pfW0) { d.ci.w = out.weightKg; d.ci.wt = Date.now(); }
   [...TAPE, ['hip']].forEach(([f]) => delete out[f]); // measurements live in the daily log, so they have dates
   const cfg = Object.assign({}, S.config || {}, {profile: out});
   const ch = (cfg.changes || []).slice(); ch.push({date: k, text: `Profile ${PROF() ? 'updated' : 'set'}: ${GMAP[out.goal].n}, target ${out.targetKg} kg at ${out.pace >= 0 ? '+' : ''}${out.pace} kg/week`}); cfg.changes = ch;

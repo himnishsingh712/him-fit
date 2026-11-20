@@ -29,6 +29,14 @@ const go = async h => { w.location.hash = h; await wait(40); };
   click('[data-act=pfsave]'); await wait(200);
   ok('profile saved to server', !!w.__mock.db.config[0]?.data.profile);
   ok('Me tab after save', txt('h1') === 'Him');
+  { const dk = () => JSON.parse(w.localStorage.getItem(Object.keys(w.localStorage).find(x => x.endsWith(':days'))) || '{}');
+    const today = Object.keys(dk()).sort().pop(); const w0 = dk()[today]?.ci?.w;
+    ok('first setup logs the typed weight', w0 === 66, w0);
+    for (let i = 0; i < 3; i++) { await go('#setup'); await wait(20); click('[data-act=pfsave]'); await wait(80); }
+    ok('saving Edit untouched never rewrites the weigh-in', dk()[today]?.ci?.w === 66, dk()[today]?.ci?.w);
+    await go('#setup'); await wait(20); setv('[data-pf="weightKg"]', '66.4', 'input'); click('[data-act=pfsave]'); await wait(80);
+    ok('typing a new weight in Edit logs it', dk()[today]?.ci?.w === 66.4, dk()[today]?.ci?.w);
+    await go('#setup'); await wait(20); setv('[data-pf="weightKg"]', '66', 'input'); click('[data-act=pfsave]'); await wait(80); }
   await go('#today');
   ok('strip shows energy and calories left', $('.strip') && txt('.strip').includes('Calories left'), txt('.strip'));
   ok('quick-add row without chai', $$('.qadd .btn').length === 4 && !$('[data-act=qchai]'));
