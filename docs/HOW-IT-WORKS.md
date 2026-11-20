@@ -153,3 +153,11 @@ Body now back to 6 tiles (BMR restored). Measurements is one line (last check ·
 - **Hits:** 3–4 quick taps are spread over up to the last hour (5+ as before). Per-session effect already grows with √hits.
 - **Sleep button:** the start is kept in config and as a backup on that day; a server copy can't erase a pending sleep; a start over 16 h old is cleared without logging; saving the morning check-in by hand clears a forgotten start.
 - On a sample of 20 Nov's morning, v2 gave 24 at waking and 47 at 11:50; v2.1 gives 42 and 65 (with the Great mood tag).
+
+## v1.14.0 — Training (third pillar)
+- **Tabs:** Today · Nutrients · + · Training · Trends. Me is the person button at the top of Today.
+- **Logging:** Training → + → exercise list (Bodyweight, Chest, Back, Shoulders, Biceps, Triceps, Glutes, Legs, Sports). An exercise asks equipment (if more than one), sets, reps, weight (not for bodyweight), with "Sets differ" for per-set reps/weights, and time (defaults to now). Sports ask duration (15 min–2 h). Each exercise remembers your last equipment, sets, reps and weight. Tap an entry to edit or remove it. Stored per day as `tr` [{id, x, eq, sets:[{r,w}], t} | {id, sport, min, t}] (src/training.js).
+- **Calories:** the base target no longer assumes training (profile training days removed). Each entry adds net calories on the day: a set ≈ 2.5 min at net MET 4 (bodyweight 3.2); football net MET 7, badminton 5.3, pickleball 3.5 per hour × kg. Training calories you don't eat (eaten above base) roll into the next day's target, max +600, one day only. Measured maintenance subtracts logged training from that day's intake, so it learns the no-training base and training is counted once. Nutrients shows the breakdown when training or carry-over applies.
+- **Water:** sport adds water (football 750, badminton 500, pickleball 250 ml per hour, up to 2 h).
+- **Energy:** sports feed the football/racket effects (pickleball at 60%), lifting entries within 90 min form a gym session; effects scale with duration (0.4–2×). Gym/Football/Racket day tags and "Trained today?" retired (old entries still count).
+- **Training tab:** today's entries and calories (+ carry-over), sets this week per muscle vs 10–20, and progress per lift (best set, first vs latest; estimated 1-rep max for weighted lifts).
