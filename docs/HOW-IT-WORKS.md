@@ -161,3 +161,6 @@ Body now back to 6 tiles (BMR restored). Measurements is one line (last check ·
 - **Water:** sport adds water (football 750, badminton 500, pickleball 250 ml per hour, up to 2 h).
 - **Energy:** sports feed the football/racket effects (pickleball at 60%), lifting entries within 90 min form a gym session; effects scale with duration (0.4–2×). Gym/Football/Racket day tags and "Trained today?" retired (old entries still count).
 - **Training tab:** today's entries and calories (+ carry-over), sets this week per muscle vs 10–20, and progress per lift (best set, first vs latest; estimated 1-rep max for weighted lifts).
+
+## v1.14.1 — Header
+Every dated screen: "‹ date ›" on the top-left (arrows next to the date they change), title and sync status below. Today adds the Me button in the top-right corner and a smaller one-line Check-in button beside the title.
