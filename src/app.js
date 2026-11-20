@@ -146,6 +146,7 @@ function stdDrinks(day) { return sum((day?.ci?.drinks || []).map(dr => dr.k === 
 function suppDue(sid, k) {
   const s = SMAP[sid]; const d = parseKey(k); const sc = s.sched;
   if (sc.until && k > sc.until) return false;
+  if (sc.from && k < sc.from) return false;
   if (sc.type === 'daily') return true;
   if (sc.type === 'weekly') return d.getDay() === sc.dow;
   if (sc.type === 'd3') { if (d.getDay() !== 0) return false; if (k <= (CFG().d3WeeklyUntil || '2026-12-29')) return true; return d.getDate() <= 7; }
@@ -153,7 +154,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.17.2';
+const APP_VERSION = '1.17.3';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
