@@ -144,7 +144,7 @@ function suppDue(sid, k) {
 }
 const dueList = k => SUPPS.filter(s => suppDue(s.id, k));
 
-const APP_VERSION = '1.14.2';
+const APP_VERSION = '1.15.0';
 // ================= state & storage =================
 // Offline-first: every change is saved on the phone immediately (localStorage),
 // then pushed to Supabase when online. Pull fetches only rows changed since the last pull.
@@ -376,7 +376,7 @@ function energyInput(k) {
   // sleep need: 7 h, moving halfway toward your own average once there are 7+ nights in the last 14 (never below 6.5)
   const nights = Array.from({length: 14}, (_, i) => S.days[addDays(k, -i - 1)]?.ci?.sl).filter(x => x != null && x > 2);
   const sleepNeed = nights.length >= 7 ? Math.min(7.5, Math.max(6.5, (7 + mean(nights)) / 2)) : 7;
-  const trEv = dd => { const tr = dd?.tr || []; return [...tr.filter(e => e.sport).map(e => ({t: e.t, k: e.sport === 'football' ? 'football' : 'racket', sc: Math.min(2, Math.max(0.4, (e.min || 0) / 60)) * (e.sport === 'pickleball' ? 0.6 : 1)})), ...trSessions(tr).map(se => ({t: se.t, k: 'gym', sc: Math.min(2, Math.max(0.4, se.min / 45))}))]; };
+  const trEv = dd => { const tr = dd?.tr || []; return [...tr.filter(e => e.sport).map(e => ({t: e.t, k: e.sport === 'football' ? 'football' : e.sport === 'mobility' ? 'mobility' : 'racket', sc: e.sport === 'mobility' ? Math.min(2, Math.max(0.5, (e.min || 10) / 10)) : Math.min(2, Math.max(0.4, (e.min || 0) / 60)) * (e.sport === 'pickleball' ? 0.6 : 1)})), ...trSessions(tr).map(se => ({t: se.t, k: 'gym', sc: Math.min(2, Math.max(0.15, se.min / 45))}))]; };
   return {pattern, rateBias, sleepNeed, events: [...(ci.ev || []).map(x => ({t: x.t, k: x.k})), ...trEv(S.days[k])], rates: (ci.er || []).filter(r => r.v).map(r => ({t: r.t, v: r.v})),
     wake: st.wake, bed: st.bed, real: st.real, usualWakeMin: minOf(p.wake || '09:00'), usualBedMin: minOf(p.bed || '01:00'),
     priorSleep: [1, 2, 3].map(i => { const c = S.days[addDays(k, -i)]?.ci; return c?.sl != null ? c.sl + 0.7 * napHours(c) : null; }), report: ci.mc && !ci.mc.skipped && ci.mc.sq != null && ci.mc.mood != null && ci.mc.feel != null ? {sq: ci.mc.sq, mood: ci.mc.mood, feel: ci.mc.feel} : null,
@@ -475,7 +475,7 @@ function weightChart(keys) {
 // ================= views =================
 function viewToday() {
   const k = S.date, d = day(k), c = dayCalc(d); const tot = c.tot;
-  let h = header(k === todayKey() ? 'Today' : 'Day', {corner: `<a class="iconbtn sm" href="#me" aria-label="Me" style="display:inline-flex;align-items:center;justify-content:center;color:inherit">${ic('user', 18)}</a>`, right: `<a class="pill pillsm" href="#checkin">Check-in</a>`});
+  let h = header(k === todayKey() ? 'Today' : 'Day', {corner: `<a class="iconbtn sm" href="#me" aria-label="Me" style="display:inline-flex;align-items:center;justify-content:center;color:inherit">${ic('user', 18)}</a>`, right: `<div style="display:flex;gap:6px;align-items:center">${k !== todayKey() ? '' : sleepStartAt() ? `<button class="pill pillsm on2" data-act="sleepend">☀️ I'm awake</button>` : `<button class="pill pillsm ghost2" data-act="sleepstart">🌙 Sleep</button>`}<a class="pill pillsm" href="#checkin">Check-in</a></div>`});
   const fl = k === todayKey() ? flags(k) : [];
   h += '<div class="grid">';
   try { h += todayStrip(k, tot); } catch (er) { console.error(er); }
@@ -878,9 +878,8 @@ function todayStrip(k, tot) {
     <div class="sx"><div class="l">${pl > 0 ? 'Protein left' : 'Protein'}</div><div class="v" style="color:${pl > 0 ? 'var(--text)' : 'var(--ok)'}">${pl > 0 ? fmt(pl,'g') + ' g' : 'done'}</div><div class="s">of ${T('p')} g</div></div></a>`;
 }
 function quickAdd(k) {
-  const d = day(k), due = dueList(k), done = due.length && due.every(x => d.supp?.[x.id]);
-  const sup = !due.length ? '' : done ? `<button class="btn on" data-act="suppundo" aria-label="Supplements taken, tap to undo">✓ Supps</button>` : `<button class="btn" data-act="suppall">Took supps</button>`;
-  return `<div class="span2 qadd" style="grid-template-columns:repeat(${sup ? 4 : 3},minmax(0,1fr))"><button class="btn" data-act="qhit">+1 hit</button><button class="btn wbtn" data-act="water" data-n="250">+250 ml</button>${sleepStartAt() ? `<button class="btn on" data-act="sleepend">☀️ I'm awake</button>` : `<button class="btn" data-act="sleepstart">😴 Going to sleep</button>`}${sup}</div>${sleepStartAt() ? `<div class="span2 muted small" style="text-align:center">Sleeping since ${tlabel(sleepStartAt())} · <a href="#" data-act="sleepundo">Undo</a></div>` : ''}`;
+  // one-tap actions that change your energy right away; each push-up / squat tap is one set in Training
+  return `<div class="span2 qadd" style="grid-template-columns:repeat(4,minmax(0,1fr))"><button class="btn" data-act="qhit">+1 hit</button><button class="btn" data-act="qtr" data-id="pushup" data-n="10">+10 push‑ups</button><button class="btn" data-act="qtr" data-id="bwsquat" data-n="25">+25 squats</button><button class="btn" data-act="qmob">+1 mobility</button></div>${sleepStartAt() ? `<div class="span2 muted small" style="text-align:center">Sleeping since ${tlabel(sleepStartAt())} · <a href="#" data-act="sleepundo">Undo</a></div>` : ''}`;
 }
 function lastSitting() {
   for (const k of [todayKey(), addDays(todayKey(), -1)]) { const its = (S.days[k]?.items || []).filter(it => it.t).sort((a, b) => a.t - b.t); if (its.length) { const t = its[its.length-1].t; return its.filter(it => t - it.t <= 20 * 60e3); } }
@@ -1213,6 +1212,12 @@ document.addEventListener('click', e => {
     case 'sleepend': sleepEnd(); break;
     case 'sleepundo': { e.preventDefault(); const c = CFG(); const st = sleepStartAt(); delete c.zz; saveConfig(c); if (st) { const kb = keyAt(st), db = S.days[kb]; if (db?.ci?.zz) { delete db.ci.zz; touch(kb); } } toast('Undone'); break; }
     case 'energyinfo': e.preventDefault(); S.sheet = {type: 'energy'}; render(); break;
+    case 'qtr': { const now = Date.now(), kk = todayKey(), dd = day(kk); dd.tr = dd.tr || []; const reps = n;
+      const last = dd.tr.filter(e => e.x === id && !e.sport).sort((a, b) => b.t - a.t)[0];
+      if (last && now - last.t <= 30 * 60e3) { last.sets.push({r: reps, w: 0}); last.t = now; } else dd.tr.push({id: uid(), x: id, eq: 'bw', sets: [{r: reps, w: 0}], t: now});
+      const tot = dd.tr.filter(e => e.x === id).reduce((s2, e) => s2 + e.sets.reduce((a2, z) => a2 + z.r, 0), 0);
+      touch(kk); toast(`✓ +${reps} ${XMAP[id].n.toLowerCase()} · ${tot} today`); break; }
+    case 'qmob': { const now = Date.now(), kk = todayKey(), dd = day(kk); dd.tr = dd.tr || []; dd.tr.push({id: uid(), sport: 'mobility', min: 10, t: now}); touch(kk); toast(`✓ Mobility logged · ${tlabel(now)}`); break; }
     case 'tradd': S.sheet = trSheetNew(id, el.dataset.sport === '1'); render(); break;
     case 'tredit': { const e2 = (d.tr || []).find(x => x.id === id); if (e2) { S.sheet = trSheetFrom(e2); render(); } break; }
     case 'trset': { const sh = S.sheet, f = el.dataset.f; if (f === 'min') sh.min = +el.dataset.v; else if (f === 'eq') { sh.eq = el.dataset.v; const l = lastTr(sh.x, sh.eq); if (l && !sh.id) sh.sets = l.sets.map(z => ({...z})); if (sh.eq === 'bw') sh.sets.forEach(z => z.w = 0); } else if (f === 'addset') sh.sets.push({...sh.sets[sh.sets.length - 1]}); else if (f === 'dropset') sh.sets.pop(); render(); break; }

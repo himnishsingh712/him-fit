@@ -1,7 +1,7 @@
 // Training: exercises, sports, calories, weekly sets and lift progress. Pure functions (no app state).
 // equipment: db dumbbell · bb barbell · mc machine · cb cable · bw bodyweight
 export const EQN = {db: 'Dumbbell', bb: 'Barbell', mc: 'Machine', cb: 'Cable', bw: 'Bodyweight'};
-export const GROUPS = [['bw', 'Bodyweight'], ['chest', 'Chest'], ['back', 'Back'], ['shoulders', 'Shoulders'], ['biceps', 'Biceps'], ['triceps', 'Triceps'], ['glutes', 'Glutes'], ['legs', 'Legs'], ['sport', 'Sports']];
+export const GROUPS = [['bw', 'Bodyweight'], ['chest', 'Chest'], ['back', 'Back'], ['shoulders', 'Shoulders'], ['biceps', 'Biceps'], ['triceps', 'Triceps'], ['glutes', 'Glutes'], ['legs', 'Legs'], ['sport', 'Sports & mobility']];
 // m: muscle groups it trains (for weekly sets). bw-only exercises have eq ['bw'].
 export const EXERCISES = [
   {id: 'pushup', n: 'Push-ups', g: 'bw', eq: ['bw'], m: ['chest', 'triceps']},
@@ -33,8 +33,9 @@ export const EXERCISES = [
   {id: 'calfraise', n: 'Calf raise', g: 'legs', eq: ['bw', 'db', 'mc'], m: ['calves']},
 ];
 // net kcal per hour per kg above sitting (MET − 1): football 7, badminton 5.3, pickleball 3.5
-export const SPORTS = [{id: 'football', n: 'Football', met: 7, ml: 750}, {id: 'badminton', n: 'Badminton', met: 5.3, ml: 500}, {id: 'pickleball', n: 'Pickleball', met: 3.5, ml: 250}];
-export const DURS = [15, 30, 45, 60, 90, 120];
+export const SPORTS = [{id: 'football', n: 'Football', met: 7, ml: 750}, {id: 'badminton', n: 'Badminton', met: 5.3, ml: 500}, {id: 'pickleball', n: 'Pickleball', met: 3.5, ml: 250}, {id: 'mobility', n: 'Mobility & stretching', met: 1.5, ml: 0}];
+// mobility: stretches, foam rolling, yoga, Surya Namaskar — counted as a timed activity (default 10 min)
+export const DURS = [10, 15, 30, 45, 60, 90, 120];
 export const XMAP = Object.fromEntries(EXERCISES.map(x => [x.id, x])), SMAP = Object.fromEntries(SPORTS.map(x => [x.id, x]));
 export const MUSCLES = [['chest', 'Chest'], ['back', 'Back'], ['shoulders', 'Shoulders'], ['biceps', 'Biceps'], ['triceps', 'Triceps'], ['legs', 'Legs'], ['glutes', 'Glutes'], ['calves', 'Calves']];
 // a set ≈ 2.5 min of moderate work incl. rest at net MET 4 (bodyweight 3.2)

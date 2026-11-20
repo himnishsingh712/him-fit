@@ -164,3 +164,9 @@ Body now back to 6 tiles (BMR restored). Measurements is one line (last check ·
 
 ## v1.14.1 — Header
 Every dated screen: "‹ date ›" on the top-left (arrows next to the date they change), title and sync status below. Today adds the Me button in the top-right corner and a smaller one-line Check-in button beside the title.
+
+## v1.15.0 — Quick row: actions that change your energy
+- Today's quick row: +1 hit · +10 push-ups · +25 squats · +1 mobility. (+250 ml stays on the Water card; supplements on their card.)
+- Push-ups/squats: each tap is one bodyweight set in Training at that time; taps within 30 min stack as sets in one entry. Lifting sessions now scale from 0.15× (a single set is a tiny nudge).
+- Mobility (stretches, foam rolling, yoga, Surya Namaskar): a 10-min "Mobility & stretching" entry (net MET 1.5, ~17 kcal); energy +3 for about an hour, then −1 for about an hour. Also in the exercise list under "Sports & mobility" with durations from 10 min.
+- 🌙 Sleep moved next to Check-in on Today; it becomes ☀️ I'm awake while you're asleep ("Sleeping since … · Undo" under the quick row).
